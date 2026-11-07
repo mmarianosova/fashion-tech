@@ -455,10 +455,32 @@ function sheets() {
     const options = [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(date, n)), n + ' days later', 'app-resched', '', addDays(date, n))).join('');
     const undo = original && original !== date && original >= F().today
       ? opt(I.calendar, fmt(original), 'Restore original date', 'app-resched', '', original) : '';
-    const custom = `<label class="msg-body" for="pickup-date">Choose any date</label>
-      <input id="pickup-date" type="date" min="${esc(F().today)}" value="${esc(date)}" style="display:block;width:100%;min-height:44px;margin:8px 0 12px">
-      <button class="big" data-act="app-date-save">Save date</button>`;
+    const custom = opt(I.calendar, 'Choose any date', 'Open calendar', 'app-calendar');
     return sheet('Pick a new date', 'Current handover date: ' + fmt(date), undo + options + custom);
+  }
+  if (st.sheet === 'app-calendar' && ap) {
+    const first = new Date(st.calendarMonth + '-01T00:00:00Z');
+    const monthName = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const next = new Date(first); next.setUTCMonth(next.getUTCMonth() + 1);
+    const count = new Date(next.getTime() - 86400000).getUTCDate();
+    const days = Array.from({ length: count }, (_, i) => {
+      const date = addDays(first.toISOString().slice(0, 10), i);
+      const selected = date === st.calendarDate;
+      return `<button type="button" class="alt" style="min-width:0;padding:0;min-height:36px;${selected ? 'border:2px solid currentColor' : ''}"
+        aria-label="${esc(fmt(date))}" aria-pressed="${selected}" data-act="app-calendar-day" data-arg="${date}" ${date < F().today ? 'disabled' : ''}>${i + 1}</button>`;
+    }).join('');
+    return sheet('Choose any date', 'Current handover date: ' + fmt(ap.input.deadline),
+      `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <button class="alt" data-act="app-calendar-month" data-arg="-1" aria-label="Previous month" ${st.calendarMonth <= F().today.slice(0, 7) ? 'disabled' : ''}>‹</button>
+        <strong>${esc(monthName)}</strong>
+        <button class="alt" data-act="app-calendar-month" data-arg="1" aria-label="Next month">›</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;text-align:center;align-items:center">
+        ${['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => `<small>${day}</small>`).join('')}
+        ${'<span></span>'.repeat(first.getUTCDay())}${days}
+      </div>
+      <p class="msg-body">Selected: ${esc(fmt(st.calendarDate))}</p>
+      <button class="big" data-act="app-date-save" ${st.calendarDate === ap.input.deadline ? 'disabled' : ''}>Save date</button>`, 'app-date');
   }
   if (st.sheet === 'app-edit' && ap) { const all = baseItems(ap), gone = st.removed[ap.id] || [], more = addable(ap);
     return sheet('Edit items', 'Tap an item to leave it out of this pickup.', all.map((x) => `<button class="chk ${gone.includes(x) ? '' : 'on'}" data-act="app-toggle" data-arg="${esc(x)}"><span class="bx">${gone.includes(x) ? '' : I.check}</span>${thumb(x)}${esc(x)} ${esc(garment(x))}</button>`).join('')
@@ -510,10 +532,20 @@ async function act(a, arg) {
     case 'rev-pile': decided('Saved as ' + arg.toLowerCase() + '.', labRec('Changed', 'book', arg, { decision: 'edit', tags: { ...(rv.proposed || {}), stream: Object.keys(PILE).find((k) => PILE[k][0] === arg) } })); break;
     case 'rev-remove': decided('Taken out of the batch.', labRec('Removed', 'no', 'Taken out of the batch', { decision: 'reject' })); break;
     case 'app-deny': decided('Not booked. It can come back on the next run.', pickRec('Not booked', 'no', undefined, { decision: 'deny' })); break;
+    case 'app-calendar':
+      st.calendarDate = ap.input.deadline;
+      st.calendarMonth = (ap.input.deadline < F().today ? F().today : ap.input.deadline).slice(0, 7);
+      st.sheet = a; render(); break;
+    case 'app-calendar-month': {
+      const month = new Date(st.calendarMonth + '-01T00:00:00Z');
+      month.setUTCMonth(month.getUTCMonth() + Number(arg));
+      st.calendarMonth = month.toISOString().slice(0, 7); render(); break;
+    }
+    case 'app-calendar-day': st.calendarDate = arg; render(); break;
     case 'app-date-save':
     case 'app-resched': {
       if (st.savingDate) break;
-      const date = a === 'app-date-save' ? document.getElementById('pickup-date')?.value : arg;
+      const date = a === 'app-date-save' ? st.calendarDate : arg;
       if (!date || date < F().today || date === ap.input.deadline) { say('Choose a different date, today or later.'); break; }
       const reopened = !!st.reopen;
       const rec = pickRec('Rescheduled', 'book', `${(PARTNERS[ap.input.partner_id] || {}).name || ''} · New date ${fmt(date)}`,
@@ -637,7 +669,7 @@ function fromNext(s) {
     alerts: (s.alerts || []).map((a) => ({ id: a.alert_id, type: a.type, summary: a.summary, items: a.items, deadline: a.deadline, next: a.next_step, ref: a.ref_kind, from: a.from_name, read: !!a.is_read })) };
 }
 async function pull() {
-  if (st.sheet === 'app-date') return;
+  if (st.sheet === 'app-date' || st.sheet === 'app-calendar') return;
   try { const r = await fetch(CFG.api + (CFG.adapter === 'next' ? '/api/state' : '/inputs'), { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
     let j = await r.json(); if (CFG.adapter === 'next') j = fromNext(j); const key = JSON.stringify(j); st.conn = 'connected';
     if (key !== lastPull) { lastPull = key; push(j); } else render();
