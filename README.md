@@ -9,3 +9,6 @@ Scan garment labels, sort items for recycling, notify the right people. Two agen
 
 Quick start: `cd sustain-app && npm install && cp .env.example .env.local && npm run dev`.
 Preview without installing anything: open `sustain-app/preview/index.html`.
+
+## Team preview (Vercel)
+The Vercel project for this repo serves the replay preview (`sustain-app/preview/index.html`) via the root `vercel.json`. Every push to `main` redeploys it. To deploy the full app instead: delete `vercel.json`, set the Vercel Root Directory to `sustain-app`, and follow `sustain-app/README.md` (needs a Turso database and `ZOO_MODE=real`).
