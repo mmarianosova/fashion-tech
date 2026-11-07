@@ -109,6 +109,7 @@ export default function Pickups() {
         {(snap?.people ?? []).map((p: any) => (<Opt key={p.name} icon={Ico.person} title={p.name} onClick={() => send(top, { send: { to: p.name } }, `Sent to ${p.name}.`, false)} />))}
       </Sheet>)}
     {doc && (<Sheet title="Pickup request" onClose={() => setDoc(null)}><RequestDoc p={doc} partner={partner(doc.partner_id)} />
+      {snap?.pickupDownloads && doc.session_id && <p><a href={`/api/pickups/${encodeURIComponent(doc.booking_id)}/artifact`} target="_blank" rel="noreferrer">Download ZooWork request</a></p>}
       <button className="big" style={{ marginBottom: 8 }} onClick={() => window.print()}>Print</button></Sheet>)}
     {toast}
   </>);

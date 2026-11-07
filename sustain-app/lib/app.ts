@@ -121,6 +121,7 @@ export async function snapshot() {
   const pl = plan(inventory as any, a.mcp.recyclers, env.today);
   return {
     mode: env.mode, today: env.today, balance: await a.zoo.getBalance().catch(() => null),
+    pickupDownloads: env.mode === 'real' && process.env.ENABLE_ZOOWORK_ARTIFACT_DOWNLOAD === '1',
     batch, items: await q('SELECT * FROM batch_items WHERE batch_id=? ORDER BY item_key', [batch?.batch_id]),
     reviews: (await q("SELECT * FROM reviews ORDER BY rowid DESC")).map((r) => ({ ...r, proposed_tags: p(r.proposed_tags), decided_tags: p(r.decided_tags) })),
     approvals: (await q('SELECT * FROM approvals ORDER BY rowid DESC')).map((r) => ({ ...r, input: p(r.input) })),

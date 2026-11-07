@@ -45,7 +45,7 @@ export async function callTool(d: McpDeps, name: string, a: any): Promise<{ data
   if (route === 'dispose' || !partner.accepts.includes(route)) return failure('route_not_accepted');
   if (items.length < partner.min_items) return failure('below_minimum');
 
-  const approvals = await d.db.all("SELECT approval_id,input FROM approvals WHERE tool='book_pickup' AND state='allowed'");
+  const approvals = await d.db.all("SELECT approval_id,session_id,input FROM approvals WHERE tool='book_pickup' AND state='allowed'");
   const approval = approvals.find((row) => j(bookingInput(p(row.input))) === j(input));
   if (!approval) return failure('approval_required');
   const booked = async () => (await d.db.all(
@@ -72,15 +72,15 @@ export async function callTool(d: McpDeps, name: string, a: any): Promise<{ data
   if (j(lots) !== j(expected)) return failure('invalid_pickup_lots');
 
   const id = d.newId('bk');
-  const inserted = await d.db.all(`INSERT INTO pickups (booking_id,partner_id,route,items,lots,deadline,created_at)
-    SELECT ?,?,?,?,?,?,?
+  const inserted = await d.db.all(`INSERT INTO pickups (booking_id,partner_id,route,items,lots,deadline,created_at,session_id)
+    SELECT ?,?,?,?,?,?,?,?
     WHERE EXISTS (SELECT 1 FROM approvals WHERE approval_id=? AND state='allowed' AND input=?)
       AND (SELECT COUNT(*) FROM inventory
         WHERE json_array(${fields.join(',')}) IN (SELECT json(value) FROM json_each(?))) = ?
       AND NOT EXISTS (SELECT 1 FROM pickups p, json_each(p.items) old
         WHERE old.value IN (SELECT value FROM json_each(?)))
     RETURNING booking_id`,
-    [id, partner_id, route, j(items), j(lots), deadline, now, approval.approval_id, approval.input,
+    [id, partner_id, route, j(items), j(lots), deadline, now, approval.session_id, approval.approval_id, approval.input,
       j(rows.map((row) => fields.map((field) => row[field]))), items.length, j(items)]);
   if (inserted.length) return confirmed(id);
   const retry = await booked();

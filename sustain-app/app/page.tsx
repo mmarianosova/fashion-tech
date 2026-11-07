@@ -19,7 +19,7 @@ export default function Home() {
 
   const items: any[] = snap.items;
   const seen = items.filter((i) => i.state !== 'pending').length;
-  const allSorted = items.length > 0 && items.every((i) => ['tagged', 'rejected'].includes(i.state));
+  const allSorted = items.every((i) => ['tagged', 'rejected'].includes(i.state));
   const intakeRun = snap.runs.find((r: any) => r.agent === 'intake' && !r.finished_at);
   const dispRun = snap.runs.find((r: any) => r.agent === 'disposition' && !r.finished_at);
   const go = async (url: string, body?: unknown) => { setErr(null); try { await post(url, body); reload(); } catch (e: any) { setErr(e.message); } };
