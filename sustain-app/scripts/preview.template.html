@@ -19,7 +19,7 @@ const I = { back: S('<path d="m15 5-7 7 7 7"/>'), check: S('<path d="m5 12.5 4.5
   question: S('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>') };
 const PILE = { shred: ['Shred pile', 'mostly natural fibres, like cotton'], denim: ['Denim pile', 'jeans and denim'], mixed: ['Mixed pile', 'mixed or man-made fabric'], trash: ['Throw away', 'cannot be reused'] };
 const ROUTE = { donate: 'Donation', recycle_shred: 'Fabric shredding', recycle_denim: 'Denim recycling', recycle_mixed: 'Mixed fabric recycling', dispose: 'Disposal' };
-const TITLE = { donate_recycle_due: 'Pickup ready', review_waiting: 'Needs a decision', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
+const TITLE = { reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Needs a decision', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
 const ITEM = Object.fromEntries(FRAMES[0].items.map((i) => [i[0], { garment: i[1], color: i[2] }]));
 const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (d) => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
@@ -28,7 +28,7 @@ const pile = (s) => (PILE[s] ? PILE[s][0] : 'Not sure');
 const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const short = (it = []) => (it.length > 6 ? it.slice(0, 6).join(', ') + ' and ' + (it.length - 6) + ' more' : it.join(', '));
 
-const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null };
+const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [] };
 const F = () => FRAMES[st.fi];
 const pendRev = () => F().reviews.filter((r) => r.state === 'pending');
 const pendApp = () => F().approvals.filter((a) => a.state === 'pending');
@@ -99,8 +99,8 @@ function check() {
   if (!t) return topbar('Check labels') + `<main class="page">${st.timer && F().phase === 'intake' ? done('<span class="spin" style="margin:0"></span>', 'Still reading labels', 'Your next card appears here as soon as the agent is unsure about one.') : done(I.check, 'Nothing to check', 'When the agent is unsure about a label, it shows up here.')}</main>`;
   return topbar('Check labels') + `<main class="page"><div class="count">${plural(q.length, 'card')} left</div><div class="deck">
     ${n ? `<div class="sc next gate">${reviewFace(n)}</div>` : ''}<div class="sc gate top-card" id="card" style="${st.exit ? `transform:translateX(${st.exit === 'right' ? 560 : -560}px) rotate(${st.exit === 'right' ? 20 : -20}deg);transition:transform .22s` : ''}">
-    <span class="stamp yes">YES</span><span class="stamp no">NOT RIGHT</span>${reviewFace(t)}</div></div>
-    ${choices('Not right', 'Yes, right')}<p class="hint">Swipe the card right for yes, left for not right.</p></main>`;
+    <span class="stamp yes">YES</span><span class="stamp no">NO</span>${reviewFace(t)}</div></div>
+    <div class="choices three"><button class="btn-no" data-act="no">${I.x}No</button><button class="btn-alt" data-act="rev-fix">${I.wrench}Change this</button><button class="btn-yes" data-act="yes">${I.check}Yes</button></div><p class="hint">Swipe right for yes, left for no.</p></main>`;
 }
 function pickups() {
   const q = queue(pendApp()), t = q[0], n = q[1], booked = F().pickups;
@@ -112,16 +112,19 @@ function pickups() {
     <span class="stamp yes">YES</span><span class="stamp no">NOT YET</span>${approvalFace(t)}</div></div><div class="choices three"><button class="btn-no" data-act="app-deny">${I.x}Do not book</button><button class="btn-alt" data-act="app-date">${I.calendar}Reschedule</button><button class="btn-yes" data-act="yes">${I.check}Yes, book it</button></div><p class="hint">“Do not book” is not final: the items come back on the next run. Swipe right to book, left for more choices.</p></main>`;
 }
 function messages() {
-  const list = alerts(), un = unread();
-  const ic = (t) => (t === 'question' ? [I.question, 'n-ask'] : t === 'donate_recycle_due' ? [I.truck, 'n-ok'] : [I.flag, 'n-warn']);
-  if (!list.length) return topbar('Messages') + `<main class="page">${done(I.bell, 'No messages', 'Messages from the agents and your team show up here.')}</main>`;
-  return topbar('Messages') + `<main class="page">${un ? `<button class="big" style="margin-bottom:12px" data-act="markread">Mark ${un} as read</button>` : ''}${list.map((a) => { const [i, tone] = ic(a.type);
-    return `<div class="note ${st.seen[a.id] ? '' : 'unread'}"><div class="note-ico ${tone}">${i}</div><div><h4>${TITLE[a.type] || 'Message'}</h4><p>${esc(a.summary)}</p>${a.deadline ? `<p class="nx">By ${fmt(a.deadline)}</p>` : ''}<p class="nx">${esc(a.next)}</p></div></div>`; }).join('')}</main>`;
+  const list = alerts();
+  const ic = (t) => (t === 'reply' ? [I.person, 'n-ask'] : t === 'donate_recycle_due' ? [I.truck, 'n-ok'] : [I.flag, 'n-warn']);
+  if (!list.length) return topbar('Messages') + `<main class="page">${done(I.bell, 'No messages', 'Updates and replies show up here.')}</main>`;
+  return topbar('Messages') + `<main class="page">${list.map((a) => { const [i, tone] = ic(a.type);
+    return `<button class="note tap ${st.seen[a.id] ? '' : 'unread'}" data-act="msgopen" data-arg="${esc(a.id)}"><div class="note-ico ${tone}">${i}</div><div><h4>${esc(msgTitle(a))}</h4><p class="clamp">${esc(a.summary)}</p></div></button>`; }).join('')}</main>`;
 }
+const msgTitle = (a) => (a.type === 'reply' && a.from ? a.from + ' replied' : TITLE[a.type] || 'Message');
+const msgTarget = (a) => (a.ref === 'review' ? ['check', 'Go to Check labels'] : a.ref === 'approval' ? ['pickups', 'Go to Approve pickups'] : a.type === 'review_waiting' || a.type === 'donate_recycle_due' ? ['pickups', 'Go to Approve pickups'] : null);
 function sheets() {
   const rv = queue(pendRev())[0], ap = queue(pendApp())[0], who = (act) => PEOPLE.map((p) => opt(I.person, p, '', act, '', p)).join('');
-  if (st.sheet === 'rev-options' && rv) return sheet('What should we do with it?', rv.item + ': choose a way forward.', opt(I.wrench, 'Change it', 'Pick the right pile', 'rev-fix') + opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'rev-who', 'warn') + opt(I.trash, 'Take it out of this batch', 'The agent skips this item', 'rev-remove', 'bad'));
-  if (st.sheet === 'rev-fix' && rv) return sheet('Which pile is it?', rv.item + ' — ' + (rv.label || 'no label text'), Object.entries(PILE).map(([k, v]) => opt(I.label, v[0], v[1], 'rev-pile', k === 'trash' ? 'bad' : '', v[0])).join(''), 'rev-options');
+  if (st.sheet === 'msg' && st.open) { const m = alerts().find((x) => x.id === st.open), t = m && msgTarget(m); if (m) return sheet(msgTitle(m), (m.items || []).join(', '), `<p class="msg-body">${esc(m.summary)}</p>${m.deadline ? `<p class="msg-body nx">By ${fmt(m.deadline)}</p>` : ''}${m.next ? `<p class="msg-body nx">${esc(m.next)}</p>` : ''}${t ? `<button class="big-link" data-act="${t[0]}">${t[1]}</button>` : ''}`); }
+  if (st.sheet === 'rev-options' && rv) return sheet('Not right. What now?', rv.item + ': choose a way forward.', opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'rev-who', 'warn') + opt(I.trash, 'Delete from pile', 'The agent skips this item', 'rev-remove', 'bad'));
+  if (st.sheet === 'rev-fix' && rv) return sheet('Which pile is it?', rv.item + ' — ' + (rv.label || 'no label text'), Object.entries(PILE).map(([k, v]) => opt(I.label, v[0], v[1], 'rev-pile', k === 'trash' ? 'bad' : '', v[0])).join(''));
   if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the queue until they answer.', who('rev-send'), 'rev-options');
   if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Do not book it', 'The agent is told no. The items come back on the next run.', 'app-deny', 'bad'));
   if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The agent is told, and proposes it again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
@@ -144,11 +147,11 @@ function act(a, arg) {
   const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages' };
   if (go[a]) { st.screen = go[a]; st.sheet = null; render(); return; }
   switch (a) {
-    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null }); render(); break;
+    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null }); st.rt.forEach(clearTimeout); st.rt = []; render(); break;
     case 'startintake': play(); render(); break;
     case 'startdisp': st.fi++; play(); render(); break; // step off the 'intake finished' frame, then the Disposition run plays
     case 'closesheet': st.sheet = null; render(); break;
-    case 'markread': alerts().forEach((x) => (st.seen[x.id] = 1)); render(); break;
+    case 'msgopen': st.seen[arg] = 1; st.open = arg; st.sheet = 'msg'; render(); break;
     case 'doc': st.doc = arg; st.sheet = 'doc'; render(); break;
     case 'yes': if (st.screen === 'check' && rv && rv.proposed) fly('right', () => decided('Saved. Thank you.')); else if (st.screen === 'pickups' && ap) fly('right', () => decided('Booked. Thank you.')); break;
     case 'no': fly('left', () => { st.exit = null; st.sheet = st.screen === 'check' ? 'rev-options' : 'app-options'; render(); }); break;
@@ -158,8 +161,11 @@ function act(a, arg) {
     case 'app-deny': decided('Not booked. It can come back on the next run.'); break;
     case 'app-resched': decided('Moved to ' + arg + '.'); break;
     case 'rev-send': case 'app-send': { const t = a === 'rev-send' ? rv : ap; st.sent[t.id] = arg; st.sheet = null;
-      st.msgs.unshift({ id: 'local-' + t.id + arg, type: 'question', summary: 'Sent to ' + arg + ': ' + (a === 'rev-send' ? t.item + ' needs a second look. ' + t.reason : 'a ' + (ROUTE[t.input.route] || '').toLowerCase() + ' pickup needs a second look.'),
-        next: arg + ' to decide. It stays in ' + (a === 'rev-send' ? 'Check labels' : 'Approve pickups') + ' until someone answers.' });
+      // The manager does not see his own outgoing message. A made-up reply (demo) arrives a few seconds later.
+      const kind = a === 'rev-send' ? 'review' : 'approval', mid = 'reply-' + t.id + arg;
+      st.rt.push(setTimeout(() => { if (st.msgs.some((m) => m.id === mid)) return; st.msgs.unshift({ id: mid, type: 'reply', from: arg, ref: kind, items: kind === 'review' ? [t.item] : (t.input.items || []),
+        summary: kind === 'review' ? 'I took another look at ' + t.item + '. The label is hard to read, so I am not sure the tags are right. Can you check it once more and decide? (Demo reply)' : 'I looked at this pickup. The recycler can come, but the date is tight. Please check it and decide. (Demo reply)',
+        next: kind === 'review' ? 'Open it in Check labels and answer Yes, No or Change this.' : 'Open it in Approve pickups and choose Book it, Reschedule or Do not book.' }); say('New message from ' + arg + '.'); render(); }, 6000));
       say('Sent to ' + arg + '.'); render(); break; }
   }
 }

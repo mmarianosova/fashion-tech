@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { libsqlDb, type Db } from './db.ts';
 import { seed, loadRecyclers, loadPeople } from './seed.ts';
 import { FakeZoo, checkStart, realZoo, type ZooClient } from './zoo.ts';
-import { handleEvent, resolveApproval, type Deps } from './bridge.ts';
+import { handleEvent, resolveApproval, deliverDemoReplies, type Deps } from './bridge.ts';
 import { simulateDisposition, simulateIntake } from './sim.ts';
 import type { McpDeps } from './mcp.ts';
 import { plan } from './rules.ts';
@@ -15,6 +15,8 @@ export const env = {
   today: process.env.DEMO_TODAY ?? '2026-11-07',
   floor: Number(process.env.BALANCE_FLOOR_USD ?? 20),
   runLimit: Number(process.env.RUN_COST_LIMIT_USD ?? 3),
+  // Demo only: how long after "Send to someone" a made-up reply arrives. Off (-1) when talking to the real ZooWork unless DEMO_REPLY_MS is set.
+  replyMs: Number(process.env.DEMO_REPLY_MS ?? (process.env.ZOO_MODE === 'real' ? -1 : 6000)),
 };
 
 type App = { db: Db; zoo: ZooClient; deps: Deps; mcp: McpDeps };
@@ -98,6 +100,7 @@ export async function pumpSession(sessionId: string) {
 
 export async function snapshot() {
   const a = await getApp();
+  if (env.replyMs >= 0) await deliverDemoReplies(a.deps, env.replyMs);
   const q = (s: string, args: any[] = []) => a.db.all(s, args);
   const inventory = (await q('SELECT * FROM inventory ORDER BY item_key')).map((r) => ({
     item_key: r.item_key, category: r.category, tags: { stream: r.stream, fibre_type: r.fibre_type, color_group: r.color_group, condition: r.condition },

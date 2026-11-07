@@ -62,23 +62,23 @@ export default function Check() {
           {nxt && <div className="sc next gate"><Face r={nxt} item={itemOf(nxt)} /></div>}
           <SwipeCard key={top.review_id} exit={exit} onDir={fly} canRight={!!top.proposed_tags}><Face r={top} item={itemOf(top)} /></SwipeCard>
         </div>
-        <div className="choices">
-          <button className="btn-no" onClick={() => fly('left')}>{Ico.x}Not right</button>
-          <button className="btn-yes" disabled={!top.proposed_tags} onClick={() => fly('right')}>{Ico.check}Yes, right</button>
+        <div className="choices three">
+          <button className="btn-no" onClick={() => fly('left')}>{Ico.x}No</button>
+          <button className="btn-alt" onClick={() => setStep('fix')}>{Ico.wrench}Change this</button>
+          <button className="btn-yes" disabled={!top.proposed_tags} onClick={() => fly('right')}>{Ico.check}Yes</button>
         </div>
-        <p className="hint">Swipe the card right for yes, left for not right.</p>
+        <p className="hint">Swipe right for yes, left for no.</p>
       </>)}
       {err && <p className="err">{err}</p>}
     </main>
 
     {step === 'options' && top && (
-      <Sheet title="What should we do with it?" sub={`${top.item_key}: choose a way forward.`} onClose={() => setStep(null)}>
-        <Opt icon={Ico.wrench} title="Change it" help="Pick the right pile" onClick={() => setStep('fix')} />
+      <Sheet title="Not right. What now?" sub={`${top.item_key}: choose a way forward.`} onClose={() => setStep(null)}>
         <Opt icon={Ico.person} tone="warn" title="Send to someone" help="They decide. It stays here until someone answers." onClick={() => setStep('who')} />
-        <Opt icon={Ico.trash} tone="bad" title="Take it out of this batch" help="The agent skips this item" onClick={() => send(top, { decision: 'reject' }, 'Taken out of the batch.')} />
+        <Opt icon={Ico.trash} tone="bad" title="Delete from pile" help="The agent skips this item" onClick={() => send(top, { decision: 'reject' }, 'Deleted from the pile.')} />
       </Sheet>)}
     {step === 'fix' && top && (
-      <Sheet title="Which pile is it?" sub={`${top.item_key} — ${top.label_text || 'no label text'}`} onClose={() => setStep('options')}>
+      <Sheet title="Which pile is it?" sub={`${top.item_key} — ${top.label_text || 'no label text'}`} onClose={() => setStep(null)}>
         {Object.entries(PILE).map(([k, v]) => (
           <Opt key={k} icon={Ico.label} tone={k === 'trash' ? 'bad' : ''} title={v.name} help={v.help}
             onClick={() => send(top, { decision: 'edit', tags: fixTags(top.proposed_tags, k) }, `Saved as ${v.name.toLowerCase()}.`)} />))}

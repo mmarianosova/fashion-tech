@@ -104,12 +104,36 @@ export async function resolveApproval(d: Deps, approvalId: string, allow: boolea
 }
 
 // ---- "Send to someone": the reviewer is not sure and wants a named person to decide ----
-// Nothing is decided and the agent keeps waiting: the item or pickup stays in the queue, marked with who it was sent to,
-// and a message goes to the inbox. There is no timeout and nothing is ever auto-denied.
-async function postMessage(d: Deps, items: string[], summary: string, next_step: string) {
+// Nothing is decided and the agent keeps waiting: the item or pickup stays in the queue, marked with who it was sent to.
+// The manager's outgoing message is not shown in Messages. What the other person sends back is (postReply). No timeout, nothing auto-denied.
+/** A message FROM someone else to the manager (a reply, an update, something to check). ref_kind says what it is about: 'review' (a label) or 'approval' (a pickup).
+ *  Messages the manager sends out ("send to someone") are not stored here: only what comes back is. */
+export async function postReply(d: Deps, o: { from: string; items: string[]; summary: string; next_step: string; ref_kind?: 'review' | 'approval' }) {
   await d.db.run(
-    `INSERT INTO alerts (alert_id,type,items,location,deadline,next_step,recycler_address,summary,created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
-    [d.newId('msg'), 'question', j(items), null, null, next_step, null, summary, d.now()]);
+    `INSERT INTO alerts (alert_id,type,items,location,deadline,next_step,recycler_address,summary,created_at,ref_kind,from_name) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [d.newId('msg'), 'reply', j(o.items), null, null, o.next_step, null, o.summary, d.now(), o.ref_kind ?? null, o.from]);
+}
+
+/** DEMO ONLY: a made-up answer from the person an item was sent to, delivered a few seconds after sending.
+ *  Runs lazily (called whenever the app state is read) so it works on serverless hosting where timers do not survive.
+ *  It only adds a message asking the manager to look again; it never decides anything. */
+export async function deliverDemoReplies(d: Deps, delayMs: number) {
+  const due = (t: string | null) => !!t && Date.parse(d.now()) - Date.parse(t) >= delayMs;
+  for (const r of await d.db.all("SELECT * FROM reviews WHERE state='pending' AND sent_to IS NOT NULL AND replied=0")) {
+    if (!due(r.sent_at)) continue;
+    await d.db.run('UPDATE reviews SET replied=1 WHERE review_id=? AND replied=0', [r.review_id]);
+    await postReply(d, { from: r.sent_to, items: [r.item_key], ref_kind: 'review',
+      summary: `I took another look at ${r.item_key}. The label is hard to read, so I am not sure the tags are right. Can you check it once more and decide? (Demo reply)`,
+      next_step: 'Open it in Check labels and answer Yes, No or Change this.' });
+  }
+  for (const a of await d.db.all("SELECT * FROM approvals WHERE state='pending' AND sent_to IS NOT NULL AND replied=0")) {
+    if (!due(a.sent_at)) continue;
+    await d.db.run('UPDATE approvals SET replied=1 WHERE approval_id=? AND replied=0', [a.approval_id]);
+    const input = p(a.input) ?? {};
+    await postReply(d, { from: a.sent_to, items: input.items ?? [], ref_kind: 'approval',
+      summary: `I looked at this pickup. The recycler can come, but the date is tight. Please check it and decide. (Demo reply)`,
+      next_step: 'Open it in Approve pickups and choose Book it, Reschedule or Do not book.' });
+  }
 }
 
 export async function sendReviewTo(d: Deps, reviewId: string, person: string, note?: string) {
@@ -118,8 +142,7 @@ export async function sendReviewTo(d: Deps, reviewId: string, person: string, no
   if (!person) throw new Error('person required');
   if (r.state !== 'pending') return { already: true, state: r.state };
   if (r.sent_to === person) return { already: true, state: 'pending', sent_to: person };
-  await d.db.run('UPDATE reviews SET sent_to=?,sent_at=? WHERE review_id=?', [person, d.now(), reviewId]);
-  await postMessage(d, [r.item_key], `Sent to ${person}: ${r.item_key} needs a second look. ${note || r.reason}`, `${person} to decide. It stays in Check labels until someone answers.`);
+  await d.db.run('UPDATE reviews SET sent_to=?,sent_at=?,replied=0 WHERE review_id=?', [person, d.now(), reviewId]);
   return { already: false, state: 'pending', sent_to: person };
 }
 
@@ -130,8 +153,7 @@ export async function sendApprovalTo(d: Deps, approvalId: string, person: string
   if (a.state !== 'pending') return { already: true, state: a.state };
   if (a.sent_to === person) return { already: true, state: 'pending', sent_to: person };
   const input = p(a.input) ?? {};
-  await d.db.run('UPDATE approvals SET sent_to=? WHERE approval_id=?', [person, approvalId]);
-  await postMessage(d, input.items ?? [], `Sent to ${person}: a ${String(input.route ?? '').replace('_', ' ')} pickup needs a second look.${note ? ' ' + note : ''}`, `${person} to decide. The booking stays in Approve pickups until someone answers.`);
+  await d.db.run('UPDATE approvals SET sent_to=?,sent_at=?,replied=0 WHERE approval_id=?', [person, d.now(), approvalId]);
   return { already: false, state: 'pending', sent_to: person };
 }
 
@@ -146,6 +168,5 @@ export async function rescheduleApproval(d: Deps, approvalId: string, deadline: 
   if (input.deadline && deadline <= input.deadline) throw new Error('new date must be later than the current one');
   await d.zoo.resolveApproval(approvalId, 'deny');
   await d.db.run("UPDATE approvals SET state='rescheduled',resched_to=?,decided_at=? WHERE approval_id=?", [deadline, d.now(), approvalId]);
-  await postMessage(d, input.items ?? [], `Pickup moved to ${deadline}: the ${String(input.route ?? '').replace('_', ' ')} pickup will be proposed again on the next run.`, 'Nothing to do now. Run now proposes it again with the new date.');
   return { already: false, state: 'rescheduled', resched_to: deadline };
 }
