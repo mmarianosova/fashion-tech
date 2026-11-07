@@ -102,9 +102,7 @@ export async function resolveReview(d: Deps, reviewId: string, decision: 'approv
 }
 
 function notifyPickupApproval(d: Deps, a: { approval_id: string; session_id: string }, decision: 'allow-once' | 'deny') {
-  const resolve: (id: string, decision: 'allow-once' | 'deny', sessionId: string) => Promise<void> =
-    d.zoo.resolveApproval.bind(d.zoo);
-  return resolve(a.approval_id, decision, a.session_id);
+  return d.zoo.resolveApproval(a.approval_id, decision, a.session_id);
 }
 
 async function resolvePickupApproval(d: Deps, a: any, allow: boolean) {
@@ -132,7 +130,7 @@ export async function resolveApproval(d: Deps, approvalId: string, allow: boolea
   if (!a) throw new Error('unknown approval');
   if (a.tool === 'book_pickup') return resolvePickupApproval(d, a, allow);
   if (a.state !== 'pending') return { already: true, state: a.state };
-  await d.zoo.resolveApproval(approvalId, allow ? 'allow-once' : 'deny');
+  await d.zoo.resolveApproval(approvalId, allow ? 'allow-once' : 'deny', a.session_id);
   await d.db.run('UPDATE approvals SET state=?,decided_at=? WHERE approval_id=?', [allow ? 'allowed' : 'denied', d.now(), approvalId]);
   return { already: false, state: allow ? 'allowed' : 'denied' };
 }

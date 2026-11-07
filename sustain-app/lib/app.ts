@@ -19,6 +19,8 @@ export const env = {
   replyMs: Number(process.env.DEMO_REPLY_MS ?? (process.env.ZOO_MODE === 'real' ? -1 : 6000)),
 };
 
+const zooAgentId = (kind: string) => kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
+
 type App = { db: Db; zoo: ZooClient; deps: Deps; mcp: McpDeps };
 const g = globalThis as any;
 
@@ -31,7 +33,12 @@ async function init(): Promise<App> {
   const dataDir = join(process.cwd(), 'data');
   const db = await libsqlDb(process.env.DATABASE_URL ?? 'file:local.db', process.env.DATABASE_AUTH_TOKEN);
   await seed(db, dataDir);
-  const zoo = env.mode === 'real' ? await realZoo(process.env.ZOOWORK_API_KEY!, process.env.ZOOWORK_BASE_URL) : new FakeZoo();
+  const zoo = env.mode === 'real' ? await realZoo(process.env.ZOOWORK_API_KEY, process.env.ZOOWORK_BASE_URL, async (sessionId) => {
+    const [run] = await db.all('SELECT agent FROM runs WHERE session_id=?', [sessionId]);
+    const agentId = run && zooAgentId(run.agent);
+    if (!agentId) throw new Error('ZooWork agent ID unavailable for this session');
+    return agentId;
+  }) : new FakeZoo();
   const now = () => new Date().toISOString();
   const newId = (prefix: string) => `${prefix}_${randomUUID().slice(0, 8)}`;
   const recyclers = loadRecyclers(dataDir);
@@ -66,7 +73,7 @@ export async function startRun(kind: 'intake' | 'disposition', opts: { batchId?:
   const message = kind === 'intake'
     ? `Process batch ${batchId} with a confidence threshold of ${threshold}. Tag every item and hold anything you are not sure about. Finish with the summary.`
     : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.`;
-  const agentId = kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
+  const agentId = zooAgentId(kind);
   const idem = `${kind}-${a.deps.newId('run')}`;
   const dateOverrides = Object.entries(overrides).map(([key, date]) => `${key}=${date}`);
   const sessionMessage = dateOverrides.length
