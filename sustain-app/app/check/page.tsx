@@ -88,11 +88,12 @@ export default function Check() {
           {nxt && <div className="sc next gate"><Face r={nxt} item={itemOf(nxt)} /></div>}
           <SwipeCard key={top.review_id} exit={exit} onDir={fly} canRight={canApprove}><Face r={top} item={itemOf(top)} /></SwipeCard>
         </div>
-        <div className="choices">
-          <button className="btn-no" onClick={() => fly('left')}>{Ico.x}Not right</button>
-          <button className="btn-yes" disabled={!canApprove} onClick={() => fly('right')}>{Ico.check}Yes, right</button>
+        <div className="choices three">
+          <button className="btn-no" onClick={() => fly('left')}>{Ico.x}No</button>
+          <button className="btn-alt" disabled={!!exit} onClick={() => setStep('fix')}>{Ico.wrench}Change this</button>
+          <button className="btn-yes" disabled={!canApprove} onClick={() => fly('right')}>{Ico.check}Yes</button>
         </div>
-        <p className="hint">{canApprove ? 'Swipe right to approve, or left to see other options.' : top.materialOnly ? 'Use Not right to record the material or choose another action.' : 'Use Not right to record the item’s condition or choose another action.'}</p>
+        <p className="hint">{canApprove ? 'Swipe right to approve, or left to see other options.' : top.materialOnly ? 'Use Change this to record the material.' : 'Use Change this to record the item’s condition.'}</p>
         {workbook && <details>
           <summary>Catalog evidence</summary>
           {/^https:\/\/(drive|docs)\.google\.com\//.test(workbook.sourceUrl) &&
@@ -111,12 +112,11 @@ export default function Check() {
 
     {step === 'options' && top && (
       <Sheet title="What should we do with it?" sub={`${top.item_key}: choose a way forward.`} onClose={() => setStep(null)}>
-        <Opt icon={Ico.wrench} title="Change it" help={top.materialOnly ? "Record the material" : workbook ? "Record the correct tags and condition" : "Pick the right pile"} onClick={() => setStep('fix')} />
         <Opt icon={Ico.person} tone="warn" title="Send to someone" help="They decide. It stays here until someone answers." onClick={() => setStep('who')} />
         <Opt icon={Ico.trash} tone="bad" title="Take it out of this batch" help="The agent skips this item" onClick={() => send(top, { decision: 'reject' }, 'Taken out of the batch.')} />
       </Sheet>)}
     {step === 'fix' && top?.materialOnly && (
-      <Sheet title="Record the material" sub={top.item_key} onClose={() => setStep('options')}>
+      <Sheet title="Record the material" sub={top.item_key} onClose={() => setStep(null)}>
         <form onSubmit={(event) => {
           event.preventDefault();
           const fibre_type = String(new FormData(event.currentTarget).get('material') ?? '').trim();
@@ -127,12 +127,12 @@ export default function Check() {
         </form>
       </Sheet>)}
     {step === 'fix' && top && workbook && !top.materialOnly && (
-      <Sheet title="Correct the tags" sub={top.item_key} onClose={() => setStep('options')}>
+      <Sheet title="Correct the tags" sub={top.item_key} onClose={() => setStep(null)}>
         <CatalogCorrection key={top.review_id} tags={top.proposed_tags}
           onSave={(tags) => send(top, { decision: 'edit', tags }, 'Corrections saved.')} />
       </Sheet>)}
     {step === 'fix' && top && !workbook && (
-      <Sheet title="Which pile is it?" sub={`${top.item_key} — ${top.label_text || 'no label text'}`} onClose={() => setStep('options')}>
+      <Sheet title="Which pile is it?" sub={`${top.item_key} — ${top.label_text || 'no label text'}`} onClose={() => setStep(null)}>
         {Object.entries(PILE).map(([k, v]) => (
           <Opt key={k} icon={Ico.label} tone={k === 'trash' ? 'bad' : ''} title={v.name} help={v.help}
             onClick={() => send(top, { decision: 'edit', tags: fixTags(top.proposed_tags, k) }, `Saved as ${v.name.toLowerCase()}.`)} />))}
