@@ -136,7 +136,7 @@ export async function retryDispositionHandoff() {
       SELECT h.batch_id FROM disposition_handoffs h JOIN runs r ON r.session_id=h.intake_session_id
       WHERE h.claim_until <= ? AND NOT EXISTS (SELECT 1 FROM runs WHERE handoff_batch=h.batch_id)
         AND (r.finished_at IS NULL OR r.status='succeeded')
-        AND (? <= 0 OR unixepoch(r.finished_at) * 1000 + ? <= ?)
+        AND (? <= 0 OR r.finished_at IS NULL OR unixepoch(r.finished_at) * 1000 + ? <= ?)
         AND NOT EXISTS (
           SELECT 1 FROM batch_items b WHERE b.batch_id=h.batch_id AND b.state NOT IN ('tagged','rejected')
             AND NOT (b.state='held' AND EXISTS (

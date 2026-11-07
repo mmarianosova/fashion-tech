@@ -157,7 +157,13 @@ test('pickup edit books the final selection using the original agent request', a
   assert.equal((await db.all('SELECT 1 FROM pickups')).length, 1);
 });
 
-test('delegated labels stay held while confirmed items get a single Disposition handoff', async () => {
+test('delegated labels trigger one pickup handoff even with the demo delay enabled', async (t) => {
+  const previousDelay = process.env.DEMO_PICKUP_REVIEW_DELAY_MS;
+  process.env.DEMO_PICKUP_REVIEW_DELAY_MS = '12000';
+  t.after(() => {
+    if (previousDelay === undefined) delete process.env.DEMO_PICKUP_REVIEW_DELAY_MS;
+    else process.env.DEMO_PICKUP_REVIEW_DELAY_MS = previousDelay;
+  });
   const { app, bridge, db, deps } = await boot();
   const { sessionId } = await app.startRun('intake', { batchId: 'SEED-1' });
   await until(async () => !(await db.all("SELECT 1 FROM batch_items WHERE state='pending'")).length);
@@ -171,6 +177,7 @@ test('delegated labels stay held while confirmed items get a single Disposition 
   await bridge.resolveReview(deps, ordinary.review_id, 'approve');
   await Promise.all([app.retryDispositionHandoff(), app.retryDispositionHandoff()]);
   await until(async () => (await db.all("SELECT 1 FROM approvals WHERE state='pending'")).length > 0);
+  assert.ok((await db.all("SELECT 1 FROM alerts WHERE type='pickup_review_due'")).length);
   const [intake] = await db.all('SELECT finished_at FROM runs WHERE session_id=?', [sessionId]);
   assert.equal(intake.finished_at, null);
   assert.deepEqual((await db.all("SELECT item_key FROM reviews WHERE state='pending'")).map((row) => row.item_key), [delegated.item_key]);
