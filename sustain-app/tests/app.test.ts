@@ -136,3 +136,34 @@ test('pickup edit books the final selection using the original agent request', a
   assert.equal(retry.data.booking_id, booked.data.booking_id);
   assert.equal((await db.all('SELECT 1 FROM pickups')).length, 1);
 });
+
+test('delegated labels stay held while confirmed items get a single Disposition handoff', async () => {
+  const { app, bridge, db, deps } = await boot();
+  const { sessionId } = await app.startRun('intake', { batchId: 'SEED-1' });
+  await until(async () => !(await db.all("SELECT 1 FROM batch_items WHERE state='pending'")).length);
+  const pending = await db.all("SELECT review_id,item_key FROM reviews WHERE state='pending' ORDER BY rowid");
+  const [delegated, ordinary, ...rest] = pending;
+  assert.ok(delegated && ordinary);
+  await bridge.sendReviewTo(deps, delegated.review_id, 'Vendor manager');
+  for (const review of rest) await bridge.resolveReview(deps, review.review_id, 'approve');
+  await app.retryDispositionHandoff();
+  assert.equal((await db.all("SELECT 1 FROM runs WHERE agent='disposition'")).length, 0);
+  await bridge.resolveReview(deps, ordinary.review_id, 'approve');
+  await Promise.all([app.retryDispositionHandoff(), app.retryDispositionHandoff()]);
+  await until(async () => (await db.all("SELECT 1 FROM approvals WHERE state='pending'")).length > 0);
+  const [intake] = await db.all('SELECT finished_at FROM runs WHERE session_id=?', [sessionId]);
+  assert.equal(intake.finished_at, null);
+  assert.deepEqual((await db.all("SELECT item_key FROM reviews WHERE state='pending'")).map((row) => row.item_key), [delegated.item_key]);
+  const [disposition] = await db.all("SELECT session_id FROM runs WHERE agent='disposition'");
+  const [inventory] = await db.all("SELECT result FROM handled_calls WHERE call_id LIKE ? AND json_type(result,'$.items')='array'", [`call_${disposition.session_id}_%`]);
+  assert.ok(!JSON.parse(inventory.result).items.some((item: any) => item.item_key === delegated.item_key));
+  await bridge.resolveReview(deps, delegated.review_id, 'reject');
+  await until(async () => {
+    for (const approval of await db.all("SELECT approval_id FROM approvals WHERE state='pending'")) {
+      await bridge.resolveApproval(deps, approval.approval_id, true);
+    }
+    return !(await db.all('SELECT 1 FROM runs WHERE finished_at IS NULL')).length;
+  });
+  await app.retryDispositionHandoff();
+  assert.equal((await db.all("SELECT 1 FROM runs WHERE agent='disposition'")).length, 1);
+});

@@ -131,9 +131,20 @@ export async function retryDispositionHandoff() {
     WHERE batch_id = (
       SELECT h.batch_id FROM disposition_handoffs h JOIN runs r ON r.session_id=h.intake_session_id
       WHERE h.claim_until <= ? AND NOT EXISTS (SELECT 1 FROM runs WHERE handoff_batch=h.batch_id)
-        AND r.finished_at IS NOT NULL AND r.status='succeeded'
-        AND NOT EXISTS (SELECT 1 FROM batch_items b WHERE b.batch_id=h.batch_id AND b.state NOT IN ('tagged','rejected'))
-        AND NOT EXISTS (SELECT 1 FROM reviews v WHERE v.batch_id=h.batch_id AND v.state='pending')
+        AND (r.finished_at IS NULL OR r.status='succeeded')
+        AND NOT EXISTS (
+          SELECT 1 FROM batch_items b WHERE b.batch_id=h.batch_id AND b.state NOT IN ('tagged','rejected')
+            AND NOT (b.state='held' AND EXISTS (
+              SELECT 1 FROM reviews v WHERE v.session_id=r.session_id AND v.batch_id=b.batch_id
+                AND v.item_key=b.item_key AND v.state='pending' AND v.sent_to IS NOT NULL
+            ))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM reviews v WHERE v.session_id=r.session_id AND v.state='pending' AND v.sent_to IS NULL
+        )
+        AND (r.finished_at IS NOT NULL OR EXISTS (
+          SELECT 1 FROM reviews v WHERE v.session_id=r.session_id AND v.state='pending' AND v.sent_to IS NOT NULL
+        ))
         AND EXISTS (SELECT 1 FROM batch_items b JOIN inventory i ON i.item_key=b.item_key
           WHERE b.batch_id=h.batch_id AND b.state='tagged' AND i.status='tagged' AND TRIM(i.location) <> ''
             AND (i.item_due_date IS NOT NULL OR i.return_window_close IS NOT NULL OR i.received_date IS NOT NULL OR i.season IS NOT NULL))

@@ -1,4 +1,4 @@
-import { getApp } from '@/lib/app';
+import { getApp, retryDispositionHandoff } from '@/lib/app';
 import { handleTextileEvent } from '@/lib/textile-flow';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,11 @@ export async function POST(request: Request) {
     const event = await request.json();
     if (!event || typeof event !== 'object' || Array.isArray(event)) throw new Error('Invalid event.');
     const { deps, mcp } = await getApp();
-    return Response.json(await handleTextileEvent(deps, event, mcp));
+    const result = await handleTextileEvent(deps, event, mcp);
+    if (event.type === 'review.send' || event.type === 'review.decision') {
+      await retryDispositionHandoff().catch(console.error);
+    }
+    return Response.json(result);
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Invalid event.' }, { status: 400 });
   }

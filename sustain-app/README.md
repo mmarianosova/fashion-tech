@@ -109,9 +109,11 @@ curl -fsS -X POST http://127.0.0.1:4319/api/runs/intake -H 'Content-Type: applic
 
 Open **Labels**. Four complete labels are accepted. For the faded label,
 choose **No** then **Delete from pile** so it does not enter Disposition.
-Once Intake finishes and the review is resolved, Disposition starts automatically
-once for the batch if confirmed items have routing data. The terminal is not
-needed for this step.
+Disposition starts automatically once for the batch if confirmed items have routing
+data and all items have been assessed. A review sent to a named reviewer may stay
+open while confirmed items move to Pickups. A delegated item stays out of that
+run while it is held. If confirmed after the handoff, it can be picked up by the
+next daily Disposition run.
 
 Open **Pickups → Edit items → Add more items** and select **DEMO-D04**,
 then choose **Done → Book pickup**. The proposal starts with three due items and
