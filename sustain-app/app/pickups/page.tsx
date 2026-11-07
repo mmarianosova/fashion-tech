@@ -27,7 +27,7 @@ function Card({ a, partner, onYes, onDate, onNo, onMore }: { a: any; partner?: a
 }
 
 // The pickup request the Disposition Agent files for a booked pickup (its artifact_publish step), shown as a one-page document.
-export function RequestDoc({ p, partner }: { p: any; partner?: any }) {
+function RequestDoc({ p, partner }: { p: any; partner?: any }) {
   return (<div className="reqdoc">
     <h4>Pickup request {p.booking_id}</h4>
     <p><b>Collector:</b> {partner?.name?.replace(' (fictional)', '') ?? p.partner_id}{partner?.address ? `, ${partner.address}` : ''}</p>
