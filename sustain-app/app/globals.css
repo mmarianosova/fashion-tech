@@ -231,3 +231,4 @@ button.note.tap{width:100%;text-align:left;font:inherit;font-weight:400;color:in
 .gcard{display:flex;gap:14px;align-items:flex-start;background:#fff;border-radius:20px;box-shadow:var(--shadow);padding:16px;margin-bottom:12px}
 .gcard b{display:block;font-size:1rem;font-weight:800}.gcard p{margin:4px 0 6px;font-size:.875rem;line-height:1.4;color:var(--ink)}.gcard small{font-size:.75rem;color:var(--mute)}
 .chk .mat{margin-left:-2px}
+.demo-strip{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}.demo-strip.live{background:var(--blue-soft);color:var(--blue-ink)}
