@@ -11,11 +11,12 @@ try {
   db.prepare('INSERT INTO batches (batch_id, created_at) VALUES (?, ?)').run('TEAM-DEMO', new Date().toISOString());
   const insert = db.prepare(`INSERT INTO batch_items
     (batch_id, item_key, garment_type, color, category, label_text, condition, location, item_due_date)
-    VALUES ('TEAM-DEMO', ?, 'jeans', 'indigo', 'bottoms', ?, 'damaged', 'Demo warehouse', '2026-11-07')`);
+    VALUES ('TEAM-DEMO', ?, 'jeans', 'indigo', 'bottoms', ?, 'damaged', 'Demo warehouse', ?)`);
   for (const id of ['DEMO-D01', 'DEMO-D02', 'DEMO-D03']) {
-    insert.run(id, '98% Cotton 2% Elastane');
+    insert.run(id, '98% Cotton 2% Elastane', '2026-11-07');
   }
-  insert.run('DEMO-REVIEW', 'Faded label: 65% Cotton');
+  insert.run('DEMO-D04', '98% Cotton 2% Elastane', '2026-12-01');
+  insert.run('DEMO-REVIEW', 'Faded label: 65% Cotton', '2026-11-07');
 } finally {
   db.close();
 }

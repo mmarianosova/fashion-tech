@@ -62,9 +62,10 @@ export async function simulateDisposition(d: Deps, sid: string, today: string, m
       if (booking.isError && booking.data.error === 'internal_error') booking = await attempt();
     }
     if (booking && !booking.isError) {
-      await call(d, sid, 'send_alert', { type: 'donate_recycle_due', items: pk.items, location: pk.locations.join(', '), deadline,
+      const items: string[] = booking.data.items;
+      await call(d, sid, 'send_alert', { type: 'donate_recycle_due', items, location: pk.locations.join(', '), deadline,
         next_step: `Hand over to ${partner.name} at ${partner.address} by ${deadline}`, recycler_address: partner.address,
-        summary: `${pk.items.length} ${pk.route.replace('_', ' ')} items ready for pickup, ${deadline}` });
+        summary: `${items.length} ${pk.route.replace('_', ' ')} items ready for pickup, ${deadline}` });
     } else if (st === 'rescheduled') {
       const to = (await d.db.all('SELECT resched_to FROM approvals WHERE approval_id=?', [approval_id]))[0].resched_to;
       await call(d, sid, 'send_alert', { type: 'review_waiting', items: pk.items, location: pk.locations.join(', '),

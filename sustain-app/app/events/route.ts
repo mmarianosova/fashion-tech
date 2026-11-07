@@ -12,7 +12,8 @@ export async function POST(request: Request) {
   try {
     const event = await request.json();
     if (!event || typeof event !== 'object' || Array.isArray(event)) throw new Error('Invalid event.');
-    return Response.json(await handleTextileEvent((await getApp()).deps, event));
+    const { deps, mcp } = await getApp();
+    return Response.json(await handleTextileEvent(deps, event, mcp));
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : 'Invalid event.' }, { status: 400 });
   }

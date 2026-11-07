@@ -116,3 +116,23 @@ test('Textile Flow reads agent results and records review decisions without inve
   assert.equal(saved.reviews.find((r) => r.id === review.id)?.state, 'approved');
   assert.equal((await db.all('SELECT * FROM pickups')).length, 0);
 });
+
+test('pickup edit books the final selection using the original agent request', async () => {
+  const { db, deps, mcp, bridge } = await boot();
+  const { handleTextileEvent } = await import('../lib/textile-flow.ts');
+  const { callTool } = await import('../lib/mcp.ts');
+  const original = { partner_id: 'R-DEN', route: 'recycle_denim',
+    deadline: '2026-11-14', items: ['D-001', 'D-003', 'D-005'] };
+  await bridge.handleEvent(deps, 'edit-pickup', { id: 'propose', type: 'approval.requested',
+    approval_id: 'edit-1', tool: 'book_pickup', input: original });
+  const event = { id: 'allow', mode: 'live', type: 'approval.decision', approval_id: 'edit-1', decision: 'allow' };
+  await assert.rejects(handleTextileEvent(deps, { ...event, items: [...original.items, 'T-001'] }, mcp), /eligible/);
+  const items = [...original.items, 'D-002'];
+  await handleTextileEvent(deps, { ...event, items }, mcp);
+  const booked = await callTool({ ...mcp, today: '2026-11-07' }, 'book_pickup', original);
+  assert.equal(booked.isError, false, JSON.stringify(booked));
+  assert.deepEqual(booked.data.items, [...items].sort());
+  const retry = await callTool({ ...mcp, today: '2026-11-07' }, 'book_pickup', original);
+  assert.equal(retry.data.booking_id, booked.data.booking_id);
+  assert.equal((await db.all('SELECT 1 FROM pickups')).length, 1);
+});

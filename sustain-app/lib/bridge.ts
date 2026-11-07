@@ -110,30 +110,38 @@ function notifyPickupApproval(d: Deps, a: { approval_id: string; session_id: str
   return d.zoo.resolveApproval(a.approval_id, decision, a.session_id);
 }
 
-async function resolvePickupApproval(d: Deps, a: any, allow: boolean) {
+async function resolvePickupApproval(d: Deps, a: any, allow: boolean, editedInput?: unknown) {
   const approvalId = a.approval_id;
   const now = d.now();
   const state = allow ? 'allowed' : 'denied';
   // Persist the human decision before ZooWork resumes and can call MCP.
-  const claimed = await d.db.all("UPDATE approvals SET state=?,decided_at=? WHERE approval_id=? AND state='pending' RETURNING state",
-    [state, now, approvalId]);
+  const edited = editedInput ? j(editedInput) : null;
+  const claimed = await d.db.all(`UPDATE approvals SET state=?,decided_at=?,approved_input=?
+    WHERE approval_id=? AND state='pending' AND NOT EXISTS (
+      SELECT 1 FROM approvals other, json_each(json_extract(COALESCE(other.approved_input,other.input),'$.items')) item
+      WHERE other.approval_id<>? AND other.state IN ('pending','allowed') AND item.value IN (
+        SELECT value FROM json_each(json_extract(?,'$.items'))
+        EXCEPT SELECT value FROM json_each(json_extract(?,'$.items'))
+      )
+    ) RETURNING state`, [state, now, edited, approvalId, approvalId, edited, a.input]);
   if (!claimed.length) {
     const current = (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approvalId]))[0];
+    if (current.state === 'pending') throw new Error('An added item is already assigned to another pickup.');
     return { already: true, state: current.state };
   }
   try {
     await notifyPickupApproval(d, a, allow ? 'allow-once' : 'deny');
   } catch (e) {
-    await d.db.run("UPDATE approvals SET state='pending',decided_at=NULL WHERE approval_id=? AND decided_at=?", [approvalId, now]);
+    await d.db.run("UPDATE approvals SET state='pending',decided_at=NULL,approved_input=NULL WHERE approval_id=? AND decided_at=?", [approvalId, now]);
     throw e;
   }
   return { already: false, state };
 }
 
-export async function resolveApproval(d: Deps, approvalId: string, allow: boolean) {
+export async function resolveApproval(d: Deps, approvalId: string, allow: boolean, editedInput?: unknown) {
   const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
   if (!a) throw new Error('unknown approval');
-  if (a.tool === 'book_pickup') return resolvePickupApproval(d, a, allow);
+  if (a.tool === 'book_pickup') return resolvePickupApproval(d, a, allow, editedInput);
   if (a.state !== 'pending') return { already: true, state: a.state };
   await d.zoo.resolveApproval(approvalId, allow ? 'allow-once' : 'deny', a.session_id);
   await d.db.run('UPDATE approvals SET state=?,decided_at=? WHERE approval_id=?', [allow ? 'allowed' : 'denied', d.now(), approvalId]);

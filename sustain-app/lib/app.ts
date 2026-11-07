@@ -7,7 +7,7 @@ import { FakeZoo, checkStart, realZoo, type ZooClient } from './zoo.ts';
 import { handleEvent, resolveApproval, deliverDemoReplies, type Deps } from './bridge.ts';
 import { simulateDisposition, simulateIntake } from './sim.ts';
 import type { McpDeps } from './mcp.ts';
-import { plan } from './rules.ts';
+import { plan, routeFor } from './rules.ts';
 import { p } from './db.ts';
 import { manufacturerSearch, createProductLookup } from './product-lookup.ts';
 import { braveSearchIndex } from './product-index.ts';
@@ -182,11 +182,13 @@ export async function snapshot() {
       ON r.session_id=a.session_id AND r.batch_id=a.batch_id AND r.item_key=a.item_key ORDER BY r.rowid DESC`))
       .map(({ assessment, ...r }) => ({ ...r, proposed_tags: p(r.proposed_tags), decided_tags: p(r.decided_tags),
         materialOnly: p(assessment)?.materialOnly, evidence: p(assessment)?.evidence })),
-    approvals: (await q('SELECT * FROM approvals ORDER BY rowid DESC')).map((r) => ({ ...r, input: p(r.input) })),
+    approvals: (await q('SELECT * FROM approvals ORDER BY rowid DESC')).map((r) => ({ ...r, input: p(r.approved_input ?? r.input) })),
     pickups: (await q('SELECT * FROM pickups ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items), lots: p(r.lots) })),
     alerts: (await q('SELECT * FROM alerts ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items) })),
     runs: await q('SELECT * FROM runs ORDER BY started_at DESC LIMIT 6'),
     events: (await q('SELECT id,session_id,type,payload,created_at FROM events ORDER BY id DESC LIMIT 40')).map((e) => ({ ...e, payload: p(e.payload) })),
+    pickupCandidates: inventory.filter((i) => i.status === 'tagged' && i.alert_status !== 'sent' && i.location?.trim())
+      .map((i) => ({ key: i.item_key, route: routeFor(i) })),
     plan: pl, recyclers: a.mcp.recyclers, people: loadPeople(join(process.cwd(), 'data')), inventoryCount: inventory.length,
   };
 }

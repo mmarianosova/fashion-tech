@@ -107,18 +107,18 @@ In another terminal, start Intake with:
 curl -fsS -X POST http://127.0.0.1:4319/api/runs/intake -H 'Content-Type: application/json' -d '{"batch_id":"TEAM-DEMO"}'
 ```
 
-Open **Labels**. Three complete labels are accepted. For the faded label,
+Open **Labels**. Four complete labels are accepted. For the faded label,
 choose **No** then **Delete from pile** so it does not enter Disposition.
 Once Intake finishes and the review is resolved, Disposition starts automatically
 once for the batch if confirmed items have routing data. The terminal is not
 needed for this step.
 
-Open **Pickups** and choose **Book pickup** for the three denim items. Open
-**Messages** to see the handover notice for Blue Cycle Denim (fictional).
+Open **Pickups → Edit items → Add more items** and select **DEMO-D04**,
+then choose **Done → Book pickup**. The proposal starts with three due items and
+the booking includes all four. Open **Messages** to see the handover notice for Blue Cycle Denim (fictional).
 Use **Export outputs** to inspect the interface events.
 
 The walkthrough includes fictional condition, location and due dates. Catalog-only
 material results stay out of Disposition until the physical inventory is recorded.
 The existing UI's **Change this** sends a sorting pile, so it cannot send corrected
-fibre percentages. Pickup item edits and reopening finished decisions are also
-unsupported by the backend. Keep the bridge on loopback or behind access control.
+fibre percentages. Reopening finished decisions is unsupported by the backend. Keep the bridge on loopback or behind access control.

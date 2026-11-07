@@ -11,7 +11,6 @@ const s = await setup();
 (globalThis as any).__sustain = Promise.resolve({ db: s.db, zoo: s.zoo, deps: s.deps, mcp: s.mcp });
 const app = await import('../lib/app.ts');
 const bridge = await import('../lib/bridge.ts');
-const sim = await import('../lib/sim.ts');
 
 type Frame = any;
 const frames: Frame[] = [];
@@ -53,7 +52,6 @@ await rec(null, 'Intake run finished: 27 tagged automatically, 5 reviewed by a p
 
 phase = 'disp';
 
-const run2 = await app.startRun('disposition', {});
 let dispDone = false;
 for (let k = 0; k < 400 && !dispDone; k++) {
   const pend = await s.db.all("SELECT approval_id FROM approvals WHERE state='pending'");
@@ -62,7 +60,8 @@ for (let k = 0; k < 400 && !dispDone; k++) {
     await bridge.resolveApproval(s.deps, pend[0].approval_id, true);
     await rec(null, 'Booking approved; agent continues');
   }
-  if ((await s.db.all('SELECT finished_at FROM runs WHERE session_id=?', [run2.sessionId]))[0].finished_at) dispDone = true;
+  const [run2] = await s.db.all("SELECT finished_at FROM runs WHERE handoff_batch='SEED-1'");
+  if (run2?.finished_at) dispDone = true;
   await new Promise((r) => setTimeout(r, 30));
 }
 phase = 'disp_done';

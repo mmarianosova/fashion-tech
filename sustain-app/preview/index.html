@@ -315,7 +315,8 @@ const baseItems = (a) => [...((a.input && a.input.items) || []), ...(st.added[a.
 const itemsOf = (a) => baseItems(a).filter((x) => !(st.removed[a.id] || []).includes(x));
 // Other items of the same kind (same pile as this pickup) that are not already in a pickup.
 const STREAM = { recycle_denim: 'denim', recycle_shred: 'shred', recycle_mixed: 'mixed' };
-const addable = (a) => { const taken = new Set([...F().approvals.flatMap((x) => (x.input && x.input.items) || []), ...F().pickups.flatMap((p) => p.items || []), ...baseItems(a)]);
+const addable = (a) => { if (a.addable_items) return a.addable_items.filter((key) => !baseItems(a).includes(key));
+  const taken = new Set([...F().approvals.flatMap((x) => (x.input && x.input.items) || []), ...F().pickups.flatMap((p) => p.items || []), ...baseItems(a)]);
   return F().items.filter((i) => i[5] === STREAM[a.input.route] && !taken.has(i[0])).map((i) => i[0]); };
 const unread = () => alerts().filter((a) => !st.seen[a.id]).length;
 
