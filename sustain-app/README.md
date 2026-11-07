@@ -34,3 +34,15 @@ Rules match the Python reference on all 32 seed items and the full disposition p
 
 ## Map
 `lib/rules.ts` rules (port of the Python reference) | `lib/tools.ts` the five custom tools | `lib/bridge.ts` events, reviews, approvals | `lib/mcp.ts` recycler-directory | `lib/zoo.ts` ZooWork boundary + fake | `lib/sim.ts` scripted agents | `lib/app.ts` server wiring, run start, snapshot | `app/` pages and routes | `data/` seed fixtures | `tests/` | `scripts/make-preview.ts`.
+
+### Agent I/O for the team interface
+
+Use the published preview in live mode with the documented `events` adapter.
+The agent backend serves `GET /inputs` and accepts `POST /events`.
+Set `TEXTILE_UI_ORIGIN` to the exact origin of the team interface for cross-origin requests.
+Keep the backend on loopback or behind access control. The origin check is not user authentication.
+
+Agent sessions are started through the existing run endpoints. While the interface polls
+`/inputs`, the backend reads events from active ZooWork sessions. A changed pickup
+item list requires a new ZooWork proposal. History edits to a final review require a new
+review. The server returns a conflict for those decisions.

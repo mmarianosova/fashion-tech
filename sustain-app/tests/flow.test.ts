@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA, setup } from './helpers.ts';
-import { dueReasons, parseLabelText, plan, routeFor, tagItem } from '../lib/rules.ts';
+import { dueReasons, parseLabelText, plan, routeDecision, routeFor, tagItem } from '../lib/rules.ts';
 import { handleEvent, resolveApproval, resolveReview } from '../lib/bridge.ts';
 import { simulateDisposition, simulateIntake } from '../lib/sim.ts';
-import { handleMcp } from '../lib/mcp.ts';
+import { callTool, handleMcp } from '../lib/mcp.ts';
+import { tools } from '../lib/tools.ts';
 import { checkStart, enforceRunLimit } from '../lib/zoo.ts';
 
 const J = (f: string) => JSON.parse(readFileSync(join(DATA, f), 'utf8'));
@@ -120,14 +121,14 @@ test('duplicate delivery of the same event is ignored; failed resolve is retried
   zoo.failResolveOnce = true;
   await assert.rejects(handleEvent(deps, 's', ev));                 // resolve fails after the tool ran
   assert.equal((await db.all('SELECT * FROM alerts')).length, 1);
-  await handleEvent(deps, 's', { ...ev, cursor: 'x1-retry', id: 'x1-retry' }); // redelivery with a new cursor
+  await handleEvent(deps, 's', ev); // retry the original cursor
   assert.equal((await db.all('SELECT * FROM alerts')).length, 1);     // tool NOT run twice
   assert.equal((zoo.resolved as any[]).length, 1);
-  assert.equal((await handleEvent(deps, 's', { ...ev, cursor: 'x1-retry', id: 'x1-retry' })).duplicate, true);
+  assert.equal((await handleEvent(deps, 's', ev)).duplicate, true);
 });
 
 test('MCP: initialize, tools/list, search, book (min enforced), notifications', async () => {
-  const { mcp } = await setup();
+  const { mcp, deps, db } = await setup();
   const rpc = (method: string, params?: any, id: any = 1) => handleMcp(mcp, { jsonrpc: '2.0', id, method, params });
   assert.equal((await rpc('initialize', { protocolVersion: '2025-03-26' })).result.serverInfo.name, 'recycler-directory');
   assert.equal(await handleMcp(mcp, { jsonrpc: '2.0', method: 'notifications/initialized' }), null);
@@ -136,8 +137,19 @@ test('MCP: initialize, tools/list, search, book (min enforced), notifications', 
   assert.equal(JSON.parse(s.result.content[0].text).recyclers[0].id, 'R-DEN');
   const bad = await rpc('tools/call', { name: 'book_pickup', arguments: { partner_id: 'R-DEN', route: 'recycle_denim', items: ['D-001'], deadline: '2026-11-14' } });
   assert.equal(bad.result.isError, true);
-  const good = await rpc('tools/call', { name: 'book_pickup', arguments: { partner_id: 'R-DEN', route: 'recycle_denim', items: ['D-001', 'D-003', 'D-005'], deadline: '2026-11-14' } });
-  assert.equal(good.result.isError, false);
+  const input = { partner_id: 'R-DEN', route: 'recycle_denim', items: ['D-001', 'D-003', 'D-005'], deadline: '2026-11-14' };
+  const book = (args = input) => rpc('tools/call', { name: 'book_pickup', arguments: args });
+  const data = (response: any) => JSON.parse(response.result.content[0].text);
+  assert.equal(data(await book()).error, 'approval_required');
+  await handleEvent(deps, 's', { id: 'a', cursor: 'a', type: 'approval.requested', approval_id: 'pickup',
+    tool: 'mcp__recyclerdirectory__book_pickup', input });
+  assert.equal(data(await book()).error, 'approval_required');
+  await resolveApproval(deps, 'pickup', true);
+  assert.equal(data(await book({ ...input, deadline: '2026-11-15' })).error, 'approval_required');
+  const [first, repeat] = await Promise.all([book(), book({ ...input, items: [...input.items].reverse() })]);
+  assert.equal(first.result.isError, false, JSON.stringify(first));
+  assert.equal(data(first).booking_id, data(repeat).booking_id);
+  assert.equal((await db.all('SELECT * FROM pickups')).length, 1);
   assert.equal((await rpc('nope')).error.code, -32601);
 });
 
@@ -159,4 +171,70 @@ test('approval is single-use: second click does not call ZooWork again', async (
   assert.equal((await resolveApproval(deps, 'ap1', true)).already, true);
   assert.equal((zoo as any).approvals.length, 1);
   assert.equal((await db.all('SELECT tool FROM approvals'))[0].tool, 'book_pickup');
+});
+
+test('Disposition reads Intake writes directly, excludes held/rejected and preserves dates and location', async () => {
+  const { db, deps, mcp } = await setup();
+  await db.run("UPDATE batch_items SET item_key='integration-' || item_key,location='DC Test',season='Fall 2026',received_date='2026-09-08',return_window_close='2026-11-07',item_due_date='2026-11-07'");
+  const tags = { stream: 'denim', fibre_type: 'cotton', color_group: 'darks', condition: 'damaged' };
+  const intakeKeys = await db.all('SELECT item_key FROM batch_items ORDER BY item_key LIMIT 3');
+  const [tagged, held, rejected] = intakeKeys.map((row) => row.item_key);
+  const input = { tags, proposed_tags: tags, confidence: 0.9, reason: 'fixture' };
+  const ctx = { ...deps, sessionId: 'intake', callId: 'save' };
+  await tools.save_tags(ctx, { ...input, item_key: tagged });
+  await tools.hold_for_review({ ...ctx, callId: 'hold' }, { ...input, item_key: held });
+  await tools.hold_for_review({ ...ctx, callId: 'reject' }, { ...input, item_key: rejected });
+  const review = (await db.all("SELECT review_id FROM reviews WHERE call_id='reject'"))[0];
+  await resolveReview(deps, review.review_id, 'reject');
+  const inv = await tools.list_inventory(ctx, { today: '2026-11-07' });
+  const row = inv.items.find((r: any) => r.item_key === tagged);
+  assert.deepEqual(row.tags, tags);
+  assert.equal(row.location, 'DC Test');
+  const result = plan(inv.items, mcp.recyclers, inv.today);
+  assert.deepEqual(result.due.find((r) => r.item_key === tagged)?.reasons,
+    ['item_date', 'received_60d', 'return_window', 'season_end']);
+  assert.equal(result.skipped.find((r) => r.item_key === held)?.reason, 'held');
+  assert.equal(result.skipped.find((r) => r.item_key === rejected)?.reason, 'rejected');
+  assert.deepEqual(dueReasons({ ...row, received_date: '2026-02-30', item_due_date: null,
+    return_window_close: null, season: null }, '2026-11-07'), []);
+});
+
+test('concurrent overlapping alerts create one message and flag only its items', async () => {
+  const { db, deps } = await setup();
+  const send = (items: string[]) => tools.send_alert({ ...deps, sessionId: 's', callId: items[0] },
+    { type: 'review_waiting', items, next_step: 'Review', summary: 'Review' });
+  const results = await Promise.allSettled([send(['T-003', 'T-004']), send(['T-004', 'T-005'])]);
+  assert.equal(results.filter((r) => r.status === 'fulfilled').length, 1);
+  const [alert] = await db.all('SELECT items FROM alerts');
+  const flagged = await db.all("SELECT item_key FROM inventory WHERE alert_status='sent' AND item_key IN ('T-003','T-004','T-005') ORDER BY item_key");
+  assert.deepEqual(flagged.map((r) => r.item_key), JSON.parse(alert.items));
+});
+
+test('approved booking still rejects stale stock and mixed-fibre items in a shred lot', async () => {
+  const { db, deps, mcp } = await setup();
+  const { locations, ...input } = J('expected_disposition.json').pickups.find((p: any) => p.route === 'recycle_shred');
+  await handleEvent(deps, 's', { id: 'a', cursor: 'a', type: 'approval.requested', approval_id: 'shred',
+    tool: 'mcp__recyclerdirectory__book_pickup', input });
+  await resolveApproval(deps, 'shred', true);
+  const [key] = input.items;
+  await db.run("UPDATE inventory SET stream='mixed' WHERE item_key=?", [key]);
+  assert.equal((await callTool(mcp, 'book_pickup', input)).data.error, 'inventory_not_eligible');
+  await db.run("UPDATE inventory SET stream='shred',status='held' WHERE item_key=?", [key]);
+  assert.equal((await callTool(mcp, 'book_pickup', input)).data.error, 'inventory_not_eligible');
+  assert.equal((await db.all('SELECT * FROM pickups')).length, 0);
+});
+
+test('material threshold and routing priority explain the disposition decision', () => {
+  const fabric = (cotton: number) => [{ fibre: 'cotton', pct: cotton }, { fibre: 'polyester', pct: 100 - cotton }];
+  const shred = tagItem('tee', fabric(70), 'white', 'damaged');
+  const mixed = tagItem('tee', fabric(69), 'white', 'damaged');
+  const denim = tagItem('jeans', fabric(69), 'indigo', 'damaged');
+  assert.equal(shred.fibre_type, 'blend');
+  assert.equal(routeFor({ category: 'tops', tags: shred }), 'recycle_shred');
+  assert.equal(routeFor({ category: 'tops', tags: mixed }), 'recycle_mixed');
+  assert.equal(routeFor({ category: 'bottoms', tags: denim }), 'recycle_denim');
+  assert.equal(routeFor({ category: 'tops', tags: { ...shred, condition: 'wearable' } }), 'donate');
+  assert.match(routeDecision({ category: 'SWIMWEAR', tags: { ...mixed, condition: 'wearable' } }).reason, /excluded from donation/);
+  assert.equal(routeFor({ category: 'tops', tags: { ...mixed, condition: 'unusable' } }), 'dispose');
+  assert.equal(routeFor({ category: 'tops', tags: { ...mixed, fibre_type: 'unknown' } }), 'review');
 });

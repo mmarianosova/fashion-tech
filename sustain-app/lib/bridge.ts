@@ -1,5 +1,6 @@
 // Event bridge: turns ZooWork events into app actions. Used by the webhook route, the poller, and the simulator.
 // Event shape below is NORMALISED by normalizeEvent(); VERIFY field names against real events at the smoke test.
+import { isCalendarDate } from './rules.ts';
 import type { Db } from './db.ts';
 import { j, p } from './db.ts';
 import type { ZooClient } from './zoo.ts';
@@ -34,8 +35,14 @@ const tn = (n?: string) => (n ?? '').split('__').pop() ?? '';
 export async function handleEvent(d: Deps, sessionId: string, raw: any) {
   const ev = normalizeEvent(raw);
   const ins = await d.db.all('SELECT 1 AS x FROM events WHERE session_id=? AND cursor=?', [sessionId, ev.cursor]);
-  if (ins.length) return { duplicate: true };
-  await d.db.run('INSERT INTO events (session_id,cursor,type,payload,created_at) VALUES (?,?,?,?,?)', [sessionId, ev.cursor, ev.type, j(raw), d.now()]);
+  if (ins.length) {
+    if (ev.type === 'agent.custom_tool_use' && ev.call_id && ev.name &&
+        (await d.db.all('SELECT 1 FROM handled_calls WHERE call_id=? AND resolved=0', [ev.call_id])).length) {
+      await runCustomTool(d, sessionId, ev);
+    }
+    return { duplicate: true };
+  }
+  await d.db.run('INSERT OR IGNORE INTO events (session_id,cursor,type,payload,created_at) VALUES (?,?,?,?,?)', [sessionId, ev.cursor, ev.type, j(raw), d.now()]);
 
   if (ev.type === 'agent.custom_tool_use' && ev.call_id && ev.name) await runCustomTool(d, sessionId, ev);
   else if (ev.type === 'approval.requested' && ev.approval_id) {
@@ -94,11 +101,36 @@ export async function resolveReview(d: Deps, reviewId: string, decision: 'approv
   return { already: false, state };
 }
 
+function notifyPickupApproval(d: Deps, a: { approval_id: string; session_id: string }, decision: 'allow-once' | 'deny') {
+  return d.zoo.resolveApproval(a.approval_id, decision, a.session_id);
+}
+
+async function resolvePickupApproval(d: Deps, a: any, allow: boolean) {
+  const approvalId = a.approval_id;
+  const now = d.now();
+  const state = allow ? 'allowed' : 'denied';
+  // Persist the human decision before ZooWork resumes and can call MCP.
+  const claimed = await d.db.all("UPDATE approvals SET state=?,decided_at=? WHERE approval_id=? AND state='pending' RETURNING state",
+    [state, now, approvalId]);
+  if (!claimed.length) {
+    const current = (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approvalId]))[0];
+    return { already: true, state: current.state };
+  }
+  try {
+    await notifyPickupApproval(d, a, allow ? 'allow-once' : 'deny');
+  } catch (e) {
+    await d.db.run("UPDATE approvals SET state='pending',decided_at=NULL WHERE approval_id=? AND decided_at=?", [approvalId, now]);
+    throw e;
+  }
+  return { already: false, state };
+}
+
 export async function resolveApproval(d: Deps, approvalId: string, allow: boolean) {
   const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
   if (!a) throw new Error('unknown approval');
+  if (a.tool === 'book_pickup') return resolvePickupApproval(d, a, allow);
   if (a.state !== 'pending') return { already: true, state: a.state };
-  await d.zoo.resolveApproval(approvalId, allow ? 'allow-once' : 'deny');
+  await d.zoo.resolveApproval(approvalId, allow ? 'allow-once' : 'deny', a.session_id);
   await d.db.run('UPDATE approvals SET state=?,decided_at=? WHERE approval_id=?', [allow ? 'allowed' : 'denied', d.now(), approvalId]);
   return { already: false, state: allow ? 'allowed' : 'denied' };
 }
@@ -160,13 +192,24 @@ export async function sendApprovalTo(d: Deps, approvalId: string, person: string
 /** Move a proposed pickup to a later hand-over date. The agent is told no (so it is not left waiting), the app remembers the new date,
  *  and the items are proposed again on the next Disposition run with that date. Not final: nothing is lost. */
 export async function rescheduleApproval(d: Deps, approvalId: string, deadline: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline ?? '')) throw new Error('deadline must be YYYY-MM-DD');
+  if (!isCalendarDate(deadline)) throw new Error('deadline must be YYYY-MM-DD');
   const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
   if (!a) throw new Error('unknown approval');
   if (a.state !== 'pending') return { already: true, state: a.state };
   const input = p(a.input) ?? {};
   if (input.deadline && deadline <= input.deadline) throw new Error('new date must be later than the current one');
-  await d.zoo.resolveApproval(approvalId, 'deny');
-  await d.db.run("UPDATE approvals SET state='rescheduled',resched_to=?,decided_at=? WHERE approval_id=?", [deadline, d.now(), approvalId]);
+  const now = d.now();
+  const claimed = await d.db.all("UPDATE approvals SET state='rescheduled',resched_to=?,decided_at=? WHERE approval_id=? AND state='pending' RETURNING state",
+    [deadline, now, approvalId]);
+  if (!claimed.length) {
+    const current = (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approvalId]))[0];
+    return { already: true, state: current.state };
+  }
+  try {
+    await notifyPickupApproval(d, a, 'deny');
+  } catch (e) {
+    await d.db.run("UPDATE approvals SET state='pending',resched_to=NULL,decided_at=NULL WHERE approval_id=? AND decided_at=?", [approvalId, now]);
+    throw e;
+  }
   return { already: false, state: 'rescheduled', resched_to: deadline };
 }

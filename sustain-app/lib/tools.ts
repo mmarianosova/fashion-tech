@@ -1,4 +1,5 @@
 // Handlers for the Intake/Disposition custom tools. Plain functions over Db so they are testable offline.
+import { isCalendarDate } from './rules.ts';
 import type { Db } from './db.ts';
 import { j, p } from './db.ts';
 
@@ -68,7 +69,7 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
   },
 
   async list_inventory(c, i) {
-    need(typeof i?.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(i.today), 'today must be YYYY-MM-DD');
+    need(isCalendarDate(i?.today), 'today must be YYYY-MM-DD');
     const rows = await c.db.all('SELECT * FROM inventory ORDER BY item_key');
     return { today: i.today, items: rows.map((r) => ({
       item_key: r.item_key, category: r.category, tags: { stream: r.stream, fibre_type: r.fibre_type, color_group: r.color_group, condition: r.condition },
@@ -80,14 +81,24 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
     need(ALERTS.includes(i?.type), 'invalid alert type');
     need(Array.isArray(i.items) && i.items.length > 0 && i.items.every((x: any) => typeof x === 'string'), 'items required');
     need(typeof i.next_step === 'string' && typeof i.summary === 'string', 'next_step and summary required');
-    const rows = await c.db.all(`SELECT item_key,alert_status FROM inventory WHERE item_key IN (${i.items.map(() => '?').join(',')})`, i.items);
-    need(rows.length === i.items.length, 'unknown item in alert');
-    const dup = rows.filter((r) => r.alert_status === 'sent').map((r) => r.item_key);
-    need(!dup.length, `already alerted: ${dup.join(', ')}`); // double-alert guard
+    const items = [...new Set<string>(i.items)].sort();
+    need(items.length === i.items.length, 'duplicate item in alert');
     const id = c.newId('alt');
-    await c.db.run(`INSERT INTO alerts (alert_id,type,items,location,deadline,next_step,recycler_address,summary,created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
-      [id, i.type, j(i.items), i.location ?? null, i.deadline ?? null, i.next_step, i.recycler_address ?? null, i.summary, c.now()]);
-    await c.db.run(`UPDATE inventory SET alert_status='sent' WHERE item_key IN (${i.items.map(() => '?').join(',')})`, i.items);
+    const inserted = await c.db.all(`INSERT INTO alerts (alert_id,type,items,location,deadline,next_step,recycler_address,summary,created_at)
+      SELECT ?,?,?,?,?,?,?,?,?
+      WHERE (SELECT COUNT(*) FROM inventory WHERE item_key IN (SELECT value FROM json_each(?))
+        AND alert_status <> 'sent' AND NOT EXISTS (
+          SELECT 1 FROM alerts a, json_each(a.items) old WHERE a.type NOT IN ('question','reply') AND old.value=inventory.item_key
+            AND (? <> 'donate_recycle_due' OR a.type <> 'review_waiting')
+        )) = ?
+      AND (? <> 'donate_recycle_due' OR EXISTS (
+        SELECT 1 FROM pickups p WHERE json_array_length(p.items)=?
+          AND NOT EXISTS (SELECT value FROM json_each(?) EXCEPT SELECT value FROM json_each(p.items))
+      ))
+      RETURNING alert_id`,
+      [id, i.type, j(items), i.location ?? null, i.deadline ?? null, i.next_step, i.recycler_address ?? null,
+        i.summary, c.now(), j(items), i.type, items.length, i.type, items.length, j(items)]);
+    need(inserted.length, 'already alerted, unknown item, or missing confirmed pickup');
     return { alert_id: id };
   },
 };

@@ -7,7 +7,7 @@ import { FakeZoo, checkStart, realZoo, type ZooClient } from './zoo.ts';
 import { handleEvent, resolveApproval, deliverDemoReplies, type Deps } from './bridge.ts';
 import { simulateDisposition, simulateIntake } from './sim.ts';
 import type { McpDeps } from './mcp.ts';
-import { plan } from './rules.ts';
+import { dueReasons, plan, routeDecision } from './rules.ts';
 import { p } from './db.ts';
 
 export const env = {
@@ -18,6 +18,8 @@ export const env = {
   // Demo only: how long after "Send to someone" a made-up reply arrives. Off (-1) when talking to the real ZooWork unless DEMO_REPLY_MS is set.
   replyMs: Number(process.env.DEMO_REPLY_MS ?? (process.env.ZOO_MODE === 'real' ? -1 : 6000)),
 };
+
+const zooAgentId = (kind: string) => kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
 
 type App = { db: Db; zoo: ZooClient; deps: Deps; mcp: McpDeps };
 const g = globalThis as any;
@@ -31,11 +33,16 @@ async function init(): Promise<App> {
   const dataDir = join(process.cwd(), 'data');
   const db = await libsqlDb(process.env.DATABASE_URL ?? 'file:local.db', process.env.DATABASE_AUTH_TOKEN);
   await seed(db, dataDir);
-  const zoo = env.mode === 'real' ? await realZoo(process.env.ZOOWORK_API_KEY!, process.env.ZOOWORK_BASE_URL) : new FakeZoo();
+  const zoo = env.mode === 'real' ? await realZoo(process.env.ZOOWORK_API_KEY, process.env.ZOOWORK_BASE_URL, async (sessionId) => {
+    const [run] = await db.all('SELECT agent FROM runs WHERE session_id=?', [sessionId]);
+    const agentId = run && zooAgentId(run.agent);
+    if (!agentId) throw new Error('ZooWork agent ID unavailable for this session');
+    return agentId;
+  }) : new FakeZoo();
   const now = () => new Date().toISOString();
   const newId = (prefix: string) => `${prefix}_${randomUUID().slice(0, 8)}`;
   const recyclers = loadRecyclers(dataDir);
-  return { db, zoo, deps: { db, zoo, now, newId }, mcp: { db, recyclers, now, newId } };
+  return { db, zoo, deps: { db, zoo, now, newId }, mcp: { db, recyclers, now, newId, today: env.today } };
 }
 
 // In fake mode the "person" decisions come from the UI; the simulator polls the DB until they arrive.
@@ -65,12 +72,30 @@ export async function startRun(kind: 'intake' | 'disposition', opts: { batchId?:
   }
   const message = kind === 'intake'
     ? `Process batch ${batchId} with a confidence threshold of ${threshold}. Tag every item and hold anything you are not sure about. Finish with the summary.`
-    : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.${Object.keys(overrides).length ? ` A person moved some items to a later hand-over date: use these deadlines instead of today plus 7 days: ${Object.entries(overrides).map(([k, v]) => `${k}=${v}`).join(', ')}.` : ''}`;
-  const agentId = kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
+    : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.`;
+  const agentId = zooAgentId(kind);
   const idem = `${kind}-${a.deps.newId('run')}`;
+  const dateOverrides = Object.entries(overrides).map(([key, date]) => `${key}=${date}`);
+  const dateInstructions = dateOverrides.length
+    ? ` A person moved some items to a later hand-over date: use these deadlines instead of today plus 7 days: ${dateOverrides.join(', ')}.`
+    : '';
+  let planInstructions = '';
+  if (kind === 'disposition' && process.env.DISPOSITION_DEMO_PLAN === '1') {
+    const inventory = await a.db.all('SELECT * FROM inventory ORDER BY item_key');
+    const rows = inventory.map(row => ({ ...row, tags: {
+      stream: row.stream, fibre_type: row.fibre_type, color_group: row.color_group, condition: row.condition,
+    } }));
+    const { pickups, escalations } = plan(rows, a.mcp.recyclers, env.today);
+    for (const pickup of pickups) {
+      const latest = pickup.items.map((key: string) => overrides[key]).filter(Boolean).sort().at(-1);
+      if (latest) pickup.deadline = latest;
+    }
+    planInstructions = ` This demo uses the app's validated route plan. Execute exactly these proposals and escalations, without splitting or reclassifying the items: ${JSON.stringify({ pickups, escalations })}. Confirm partners with search_recyclers, and request human approval for each booking. If both lists are empty, do not book or notify.`;
+  }
+  const sessionMessage = message + dateInstructions + planInstructions;
   const { sessionId } = env.mode === 'real'
-    ? await a.zoo.createSession(agentId!, message, idem)
-    : await a.zoo.createSession('fake', message, idem);
+    ? await a.zoo.createSession(agentId!, sessionMessage, idem)
+    : await a.zoo.createSession('fake', sessionMessage, idem);
   await a.db.run('INSERT INTO runs (session_id,agent,ref,started_at) VALUES (?,?,?,?)', [sessionId, kind, batchId, a.deps.now()]);
   if (kind === 'intake') {
     await a.db.run("UPDATE batch_items SET state='pending' WHERE batch_id=? AND state<>'tagged'", [batchId]);
@@ -110,6 +135,7 @@ export async function snapshot() {
   const pl = plan(inventory as any, a.mcp.recyclers, env.today);
   return {
     mode: env.mode, today: env.today, balance: await a.zoo.getBalance().catch(() => null),
+    pickupDownloads: env.mode === 'real' && process.env.ENABLE_ZOOWORK_ARTIFACT_DOWNLOAD === '1',
     batch, items: await q('SELECT * FROM batch_items WHERE batch_id=? ORDER BY item_key', [batch?.batch_id]),
     reviews: (await q("SELECT * FROM reviews ORDER BY rowid DESC")).map((r) => ({ ...r, proposed_tags: p(r.proposed_tags), decided_tags: p(r.decided_tags) })),
     approvals: (await q('SELECT * FROM approvals ORDER BY rowid DESC')).map((r) => ({ ...r, input: p(r.input) })),
@@ -117,6 +143,9 @@ export async function snapshot() {
     alerts: (await q('SELECT * FROM alerts ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items) })),
     runs: await q('SELECT * FROM runs ORDER BY started_at DESC LIMIT 6'),
     events: (await q('SELECT id,session_id,type,payload,created_at FROM events ORDER BY id DESC LIMIT 40')).map((e) => ({ ...e, payload: p(e.payload) })),
+    itemDecisions: Object.fromEntries(inventory.map(row => [row.item_key, {
+      ...routeDecision(row), fibre: row.tags.fibre_type, due: dueReasons(row, env.today),
+    }])),
     plan: pl, recyclers: a.mcp.recyclers, people: loadPeople(join(process.cwd(), 'data')), inventoryCount: inventory.length,
   };
 }
