@@ -125,7 +125,7 @@ function home() {
   const nPick = f.pickups.length + ap;
   const cta = needs > 0 ? `<button class="big" data-act="${rv ? 'check' : 'pickups'}">Start reviewing</button>`
     : `<div class="need ok">${I.check}<span>You are all caught up<small>Nothing is waiting for you</small></span></div>`;
-  return `<div class="hello"><div class="eyebrow"><span class="brand"><svg aria-hidden="true" width="28" height="28" viewBox="0 0 96 96"><rect width="96" height="96" rx="25" fill="#006BFF"/><path d="M24 31h45 M31 48h31 M38 65h17" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/></svg>Sortix</span><span class="date">${esc(fmt(f.today))}</span></div>
+  return `<div class="hello"><div class="eyebrow"><span class="brand">/*SORTIX_LOGO*/</span><span class="date">${esc(fmt(f.today))}</span></div>
     <h1>${needs > 0 ? plural(needs, 'item') + ' to review' : 'All caught up'}</h1></div><main class="page">
     ${tile('check', I.label, 'Labels to review', rv ? 'Fibre content we could not read' : 'Nothing waiting', rv)}
     ${tile('pickups', I.truck, 'Pickups to review', pi ? `${ROUTE[pi.route] || pi.route}, ${(PARTNERS[pi.partner_id] || {}).name || ''}` : 'Nothing waiting', ap)}
@@ -264,7 +264,7 @@ function render() {
   if (st.dragging) return;
   const strip = CFG.embed ? '' : st.mode === 'live'
     ? `<div class="demo-strip live">Live · ${esc(CFG.api ? (st.conn || 'connecting') : 'waiting for agent input')}<button data-act="export">Export outputs (${OUT.length})</button>${CFG.locked ? '' : '<button data-act="demo">Back to demo</button>'}</div>`
-    : `<div class="demo-strip">Demo with sample data. Whatever you choose, the story continues the same way.<button data-act="restart">Restart</button><button data-act="clear">Clear demo data</button></div>`;
+    : `<div class="demo-strip">Guided demo · Sample data. Follow the steps to see the workflow.<button data-act="restart">Restart demo</button></div>`;
   const sbar = `<div class="sbar" aria-hidden="true">9:41<span>${I.sig}${I.wifi}${I.batt}</span></div>`;
   const body = st.screen === 'check' ? check() : st.screen === 'pickups' ? pickups() : st.screen === 'messages' ? messages() : st.screen === 'history' ? history() : st.screen === 'guide' ? guide() : home();
   const markup = sbar + strip + `<div class="scroll">${body}</div>` + tabbar() + sheets() + (st.toast ? `<div class="toast" role="status">${esc(st.toast)}</div>` : '');

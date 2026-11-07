@@ -88,16 +88,37 @@ export function dueReasons(row: InvRow, today: string) {
   if (row.received_date && daysBetween(today, row.received_date) >= DAYS_SINCE_RECEIVED) r.push('received_60d');
   return r;
 }
-export function routeFor(row: Pick<InvRow, 'category' | 'tags'>) {
+const RECYCLE_ROUTES = {
+  shred: { route: 'recycle_shred', reason: 'Tagged for fibre shredding. Shred lots are separated by colour.' },
+  denim: { route: 'recycle_denim', reason: 'Tagged as denim. Denim goes to its own recycling stream.' },
+  mixed: { route: 'recycle_mixed', reason: 'Tagged for mixed-fibre recycling.' },
+} as const;
+
+export function routeDecision(row: Pick<InvRow, 'category' | 'tags'>) {
   const t = row.tags;
   if (!t || !['trash', 'shred', 'denim', 'mixed'].includes(t.stream) ||
       !['wearable', 'damaged', 'unusable'].includes(t.condition) ||
       !['whites', 'darks', 'brights', 'mixed'].includes(t.color_group) ||
-      !t.fibre_type?.trim() || !row.category?.trim()) return 'review';
-  if (t.stream === 'trash' || t.condition === 'unusable') return 'dispose';
-  if (t.condition === 'wearable' && !NO_DONATE.has(row.category.trim().toLowerCase())) return 'donate';
-  return ({ shred: 'recycle_shred', denim: 'recycle_denim', mixed: 'recycle_mixed' } as Record<string, string>)[t.stream];
+      typeof t.fibre_type !== 'string' || !t.fibre_type.trim() ||
+      typeof row.category !== 'string' || !row.category.trim()) {
+    return { route: 'review', reason: 'Material tags, condition, colour group or category need checking.' };
+  }
+  if (t.stream === 'trash' || t.condition === 'unusable') {
+    return { route: 'dispose', reason: 'Unusable or tagged for disposal. A person must confirm disposal.' };
+  }
+  const category = row.category.trim().toLowerCase();
+  if (t.condition === 'wearable' && !NO_DONATE.has(category)) {
+    return { route: 'donate', reason: 'Wearable and in a donation-eligible category. Donation takes priority over recycling.' };
+  }
+  if (t.fibre_type.trim().toLowerCase() === 'unknown') {
+    return { route: 'review', reason: 'The fibre is unknown. Confirm composition before choosing a recycling stream.' };
+  }
+  const result = RECYCLE_ROUTES[t.stream as keyof typeof RECYCLE_ROUTES];
+  const why = t.condition === 'wearable' ? `${category} is excluded from donation.` : 'Damaged item.';
+  return { ...result, reason: `${why} ${result.reason}` };
 }
+
+export const routeFor = (row: Pick<InvRow, 'category' | 'tags'>) => routeDecision(row).route;
 
 export type Recycler = { id: string; name: string; accepts: string[]; min_items: number; address: string; contact: string };
 export function plan(inventory: InvRow[], recyclers: Recycler[], today: string) {

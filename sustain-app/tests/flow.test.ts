@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DATA, setup } from './helpers.ts';
-import { dueReasons, parseLabelText, plan, routeFor, tagItem } from '../lib/rules.ts';
+import { dueReasons, parseLabelText, plan, routeDecision, routeFor, tagItem } from '../lib/rules.ts';
 import { handleEvent, resolveApproval, resolveReview } from '../lib/bridge.ts';
 import { simulateDisposition, simulateIntake } from '../lib/sim.ts';
 import { callTool, handleMcp } from '../lib/mcp.ts';
@@ -226,4 +226,19 @@ test('approved booking still rejects stale stock and mixed-fibre items in a shre
   await db.run("UPDATE inventory SET stream='shred',status='held' WHERE item_key=?", [key]);
   assert.equal((await callTool(mcp, 'book_pickup', input)).data.error, 'inventory_not_eligible');
   assert.equal((await db.all('SELECT * FROM pickups')).length, 0);
+});
+
+test('material threshold and routing priority explain the disposition decision', () => {
+  const fabric = (cotton: number) => [{ fibre: 'cotton', pct: cotton }, { fibre: 'polyester', pct: 100 - cotton }];
+  const shred = tagItem('tee', fabric(70), 'white', 'damaged');
+  const mixed = tagItem('tee', fabric(69), 'white', 'damaged');
+  const denim = tagItem('jeans', fabric(69), 'indigo', 'damaged');
+  assert.equal(shred.fibre_type, 'blend');
+  assert.equal(routeFor({ category: 'tops', tags: shred }), 'recycle_shred');
+  assert.equal(routeFor({ category: 'tops', tags: mixed }), 'recycle_mixed');
+  assert.equal(routeFor({ category: 'bottoms', tags: denim }), 'recycle_denim');
+  assert.equal(routeFor({ category: 'tops', tags: { ...shred, condition: 'wearable' } }), 'donate');
+  assert.match(routeDecision({ category: 'SWIMWEAR', tags: { ...mixed, condition: 'wearable' } }).reason, /excluded from donation/);
+  assert.equal(routeFor({ category: 'tops', tags: { ...mixed, condition: 'unusable' } }), 'dispose');
+  assert.equal(routeFor({ category: 'tops', tags: { ...mixed, fibre_type: 'unknown' } }), 'review');
 });

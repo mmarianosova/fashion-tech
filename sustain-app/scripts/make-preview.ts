@@ -47,6 +47,7 @@ const waitReview = async () => {
   }
 };
 await waitReview();
+if (!sawIntakeDone) throw new Error('Intake replay did not finish');
 phase = 'intake_done';
 await rec(null, 'Intake run finished: 27 tagged automatically, 5 reviewed by a person');
 
@@ -64,6 +65,7 @@ for (let k = 0; k < 400 && !dispDone; k++) {
   if (run2?.finished_at) dispDone = true;
   await new Promise((r) => setTimeout(r, 30));
 }
+if (!dispDone) throw new Error('Disposition replay did not finish');
 phase = 'disp_done';
 await rec(null, 'Disposition run finished: pickups booked, alerts sent');
 
@@ -71,7 +73,9 @@ const tpl = readFileSync(join(root, 'scripts', 'preview.template.html'), 'utf8')
 const css = readFileSync(join(root, 'app', 'globals.css'), 'utf8');
 const partners = Object.fromEntries(s.mcp.recyclers.map((r: any) => [r.id, { name: r.name.replace(' (fictional)', ''), address: r.address }]));
 const people = JSON.parse(readFileSync(join(root, 'data', 'people.json'), 'utf8')).map((p: any) => p.name);
-const html = tpl.replace('/*CSS*/', css).replace('/*FRAMES*/', 'const FRAMES=' + JSON.stringify(frames) + ';const PARTNERS=' + JSON.stringify(partners) + ';const PEOPLE=' + JSON.stringify(people) + ';');
+const logo = readFileSync(join(root, 'public', 'sortix-logo.svg'), 'utf8').trim()
+  .replace('width="241" height="96"', 'width="108" height="43"');
+const html = tpl.replace('/*SORTIX_LOGO*/', logo).replace('/*CSS*/', css).replace('/*FRAMES*/', 'const FRAMES=' + JSON.stringify(frames) + ';const PARTNERS=' + JSON.stringify(partners) + ';const PEOPLE=' + JSON.stringify(people) + ';');
 mkdirSync(join(root, 'preview'), { recursive: true });
 writeFileSync(join(root, 'preview', 'index.html'), html);
 console.log(`frames=${frames.length} gates=${frames.filter((f) => f.gate).length} size=${(html.length / 1024).toFixed(0)} KB`);

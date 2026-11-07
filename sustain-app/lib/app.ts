@@ -7,7 +7,7 @@ import { FakeZoo, checkStart, realZoo, type ZooClient } from './zoo.ts';
 import { handleEvent, resolveApproval, deliverDemoReplies, type Deps } from './bridge.ts';
 import { simulateDisposition, simulateIntake } from './sim.ts';
 import type { McpDeps } from './mcp.ts';
-import { plan, routeFor } from './rules.ts';
+import { dueReasons, plan, routeDecision, routeFor } from './rules.ts';
 import { p } from './db.ts';
 import { manufacturerSearch, createProductLookup } from './product-lookup.ts';
 import { braveSearchIndex } from './product-index.ts';
@@ -203,6 +203,9 @@ export async function snapshot() {
     alerts: (await q('SELECT * FROM alerts ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items) })),
     runs: await q('SELECT * FROM runs ORDER BY started_at DESC LIMIT 6'),
     events: (await q('SELECT id,session_id,type,payload,created_at FROM events ORDER BY id DESC LIMIT 40')).map((e) => ({ ...e, payload: p(e.payload) })),
+    itemDecisions: Object.fromEntries(inventory.map((row) => [row.item_key, {
+      ...routeDecision(row), fibre: row.tags.fibre_type, due: dueReasons(row, env.today),
+    }])),
     pickupCandidates: inventory.filter((i) => i.status === 'tagged' && i.alert_status !== 'sent' && i.location?.trim())
       .map((i) => ({ key: i.item_key, route: routeFor(i) })),
     plan: pl, recyclers: a.mcp.recyclers, people: loadPeople(join(process.cwd(), 'data')), inventoryCount: inventory.length,

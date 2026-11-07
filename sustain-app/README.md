@@ -89,38 +89,41 @@ of the physical item.
 The local test run uses scripted ZooWork events. Live mode requires deployed
 agents and credentials and must be verified against that environment.
 
-## Team walkthrough
+## Interactive demo from GitHub
 
-This uses the team's existing Textile Flow preview in live UI mode with
-scripted agents and fictional inventory. The app sends no real pickup requests.
-
-```sh
-npm install
-node scripts/prepare-team-demo.ts
-DATABASE_URL=file:local.db.team-demo ZOO_MODE=fake DEMO_TODAY=2026-11-07 TEXTILE_FLOW_BRIDGE=1 TEXTILE_FLOW_ORIGIN=http://127.0.0.1:4319 INTAKE_WEB_LOOKUP=0 npm run dev -- --hostname 127.0.0.1 --port 4319
-```
-
-Open http://127.0.0.1:4319/team-preview.html?mode=live&api=http://127.0.0.1:4319&adapter=events.
-In another terminal, start Intake with:
+Run with Node.js 22.13 or newer:
 
 ```sh
-curl -fsS -X POST http://127.0.0.1:4319/api/runs/intake -H 'Content-Type: application/json' -d '{"batch_id":"TEAM-DEMO"}'
+cd sustain-app
+npm ci
+npm run demo
 ```
 
-Open **Labels**. Four complete labels are accepted. For the faded label,
-choose **No** then **Delete from pile** so it does not enter Disposition.
-Disposition starts automatically once for the batch if confirmed items have routing
-data and all items have been assessed. A review sent to a named reviewer may stay
-open while confirmed items move to Pickups. A delegated item stays out of that
-run while it is held. If confirmed after the handoff, it can be picked up by the
-next daily Disposition run.
+Open the **Open Sortix** URL printed in the terminal. A new fictional 32-item
+batch is created on each launch. Both agents use the local simulator. No
+ZooWork key, workbook or external account is needed. Keep the terminal running
+while testing and stop it with Ctrl+C. If the port is occupied, use
+`SORTIX_DEMO_PORT=4321 npm run demo`.
 
-Open **Pickups → Edit items → Add more items** and select **DEMO-D04**,
-then choose **Done → Book pickup**. The proposal starts with three due items and
-the booking includes all four. Open **Messages** to see the handover notice for Blue Cycle Denim (fictional).
-Use **Export outputs** to inspect the interface events.
+1. On **Home**, choose **Start reviewing**. Use **Change this → Shred pile**
+   for M-001, **Yes** for REVIEW-02, and **No → Delete from pile** for REVIEW-03.
+2. Send REVIEW-04 to **Vendor manager**. A **Donation** proposal and a
+   **Pickup to review** message appear while that label remains in review.
+3. Open **Pickups**. Reschedule to Nov 17, then choose
+   **History → Pickups → Change → Change date**. Pick Nov 12 and save.
+   Open **Pickups** again to confirm the corrected date.
+4. In **Edit items**, add SAMPLE-04. Choose **Done → Book pickup**.
+   **Messages → Pickup ready** shows the four items and the final date.
 
-The walkthrough includes fictional condition, location and due dates. Catalog-only
-material results stay out of Disposition until the physical inventory is recorded.
-The existing UI's **Change this** sends a sorting pile, so it cannot send corrected
-fibre percentages. To revise a rescheduled pickup, open **History → Pickups → Change → Change date**. Choose a date or restore the original date. The corrected proposal returns to **Pickups** for confirmation at the new date. Other finished decisions cannot be changed from History. Keep the bridge on loopback or behind access control.
+Data, replies and bookings in this walkthrough are fictional. See the
+[agent bridge contract](../docs/agent-bridge.md) and the ZooWork setup above
+to connect real agents. Keep a live bridge on loopback or behind access control.
+
+## Public judge preview
+
+The root `vercel.json` publishes `preview/index.html` as a static guided replay.
+Open the public link, select **Start reviewing**, and follow **Labels**,
+**Pickups**, and **Messages**. The replay requires no login, shows sample data,
+and follows the recorded outcome after a decision. Use the local interactive
+demo above to test how different choices affect the batch. Regenerate the
+replay with `npm run preview` after changing the preview template or replay.

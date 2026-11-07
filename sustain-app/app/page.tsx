@@ -4,7 +4,7 @@ import { Ico } from '@/components/icons';
 import { useAppState } from '@/lib/useAppState';
 import { fmtDate, plural, routeName } from '@/lib/plain';
 
-const brand = <span className="brand"><svg aria-hidden="true" width="28" height="28" viewBox="0 0 96 96"><rect width="96" height="96" rx="25" fill="#006BFF"/><path d="M24 31h45 M31 48h31 M38 65h17" fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round"/></svg>Sortix</span>;
+const brand = <span className="brand"><img src="/sortix-logo.svg" alt="Sortix" width="108" height="43" /></span>;
 
 // Home: what is waiting for you, and a short list to browse everything else.
 export default function Home() {
