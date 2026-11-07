@@ -10,6 +10,7 @@ import type { McpDeps } from './mcp.ts';
 import { plan } from './rules.ts';
 import { p } from './db.ts';
 import { manufacturerSearch, createProductLookup } from './product-lookup.ts';
+import { braveSearchIndex } from './product-index.ts';
 
 export const env = {
   mode: (process.env.ZOO_MODE ?? 'fake') as 'fake' | 'real',
@@ -41,9 +42,10 @@ async function init(): Promise<App> {
   const now = () => new Date().toISOString();
   const newId = (prefix: string) => `${prefix}_${randomUUID().slice(0, 8)}`;
   const recyclers = loadRecyclers(dataDir);
+  const indexKey = process.env.BRAVE_SEARCH_API_KEY;
   const lookupProduct = process.env.INTAKE_WEB_LOOKUP === '1'
-    ? createProductLookup(manufacturerSearch) : undefined;
-  return { db, zoo, deps: { db, zoo, now, newId, lookupProduct }, mcp: { db, recyclers, now, newId } };
+    ? createProductLookup(manufacturerSearch, undefined, indexKey ? braveSearchIndex(indexKey) : undefined) : undefined;
+  return { db, zoo, deps: { db, zoo, now, newId, lookupProduct, materialOnly: true }, mcp: { db, recyclers, now, newId } };
 }
 
 // In fake mode the "person" decisions come from the UI; the simulator polls the DB until they arrive.
@@ -110,7 +112,7 @@ export async function snapshot() {
     reviews: (await q(`SELECT r.*,a.result AS assessment FROM reviews r LEFT JOIN intake_assessments a
       ON r.session_id=a.session_id AND r.batch_id=a.batch_id AND r.item_key=a.item_key ORDER BY r.rowid DESC`))
       .map(({ assessment, ...r }) => ({ ...r, proposed_tags: p(r.proposed_tags), decided_tags: p(r.decided_tags),
-        evidence: p(assessment)?.evidence })),
+        materialOnly: p(assessment)?.materialOnly, evidence: p(assessment)?.evidence })),
     approvals: (await q('SELECT * FROM approvals ORDER BY rowid DESC')).map((r) => ({ ...r, input: p(r.input) })),
     pickups: (await q('SELECT * FROM pickups ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items), lots: p(r.lots) })),
     alerts: (await q('SELECT * FROM alerts ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items) })),

@@ -7,11 +7,11 @@ export type CatalogRow = {
 export type CatalogInput = { sourceUrl: string; rows: CatalogRow[] };
 type Item = {
   item_key: string; label_text?: string; garment_type?: string; color?: string;
-  condition?: string; visible_note?: string; catalog?: CatalogInput;
+  condition?: string; visible_note?: string; catalog?: CatalogInput; materialOnly?: boolean;
 };
-export type LookupQuery = { style: string; upcs: string[]; urls: string[] };
+export type LookupQuery = { style: string; upcs: string[]; urls: string[]; materialOnly?: boolean };
 export type ProductMatch = { url: string; style?: string; upc?: string; composition?: string; color?: string };
-export type LookupAttempt = { method: 'catalog_url' | 'identifier_search'; target: string; outcome: string };
+export type LookupAttempt = { method: 'catalog_url' | 'identifier_search' | 'index_search'; target: string; outcome: string };
 export type ProductLookup = (query: LookupQuery) => Promise<(
   { status: 'found'; matches: ProductMatch[] } | { status: 'not_found' | 'unavailable' }
 ) & { attempts?: LookupAttempt[] }>;
@@ -53,7 +53,17 @@ function material(text: string): Fibre[] | null {
   return [...grouped].sort(([a], [b]) => a.localeCompare(b)).map(([fibre, pct]) => ({ fibre, pct }));
 }
 
+function layeredMaterial(text: string) {
+  const layers = /^outer:\s*(.+?)\s*\/\s*lining:\s*(.+)$/i.exec(text);
+  if (!layers) return null;
+  const parse = (value: string): Fibre[] | null =>
+    /^100\s*%\s+(?:genuine\s+)?leather$/i.test(value.trim()) ? [{ fibre: 'leather', pct: 100 }] : material(value);
+  const outer = parse(layers[1]), lining = parse(layers[2]);
+  return outer && lining ? { outer, lining } : null;
+}
+
 export async function assessIntake(item: Item, lookup?: ProductLookup) {
+  const materialOnly = item.materialOnly === true;
   const rows = item.catalog?.rows ?? [];
   const style = rows[0]?.style ?? item.item_key;
   const upcs = [...new Set(rows.flatMap((r) => r.upcs))];
@@ -66,16 +76,17 @@ export async function assessIntake(item: Item, lookup?: ProductLookup) {
   const reasons: string[] = [];
   let fibres = compositions.size === 1 && complete.length === parsed.length ? complete[0] : null;
   let color = colors.length === 1 ? colors[0] : '';
-  const condition = conditions.includes(normalized(item.condition)) ? normalized(item.condition) : 'unknown';
+  let materialComponents = materialOnly && sourceTexts.length === 1 ? layeredMaterial(sourceTexts[0]) : null;
+  const condition = !materialOnly && conditions.includes(normalized(item.condition)) ? normalized(item.condition) : 'unknown';
   if (compositions.size > 1) reasons.push('Conflicting compositions');
-  if (colors.length > 1) reasons.push('Conflicting colors');
+  if (!materialOnly && colors.length > 1) reasons.push('Conflicting colors');
   if (/^photo shows/i.test(item.visible_note ?? '')) reasons.push('Recorded label and garment conflict');
 
   let lookupStatus = 'not_needed';
   let matches: ProductMatch[] = [];
   let attempts: LookupAttempt[] = [];
   let verified: ProductMatch | null = null;
-  if (rows.length && (!fibres || !color)) {
+  if (rows.length && ((!fibres && !materialComponents) || (!materialOnly && !color))) {
     const eligible = urls.filter((raw) => {
       const url = productUrl(raw);
       const hint = url?.searchParams.get('cm_kws');
@@ -88,7 +99,7 @@ export async function assessIntake(item: Item, lookup?: ProductLookup) {
     lookupStatus = 'not_configured';
     if (lookup) {
       try {
-        const query = { style, upcs, urls: eligible };
+        const query = { style, upcs, urls: eligible, materialOnly };
         const result = await lookup(query);
         attempts.push(...(result.attempts ?? []));
         lookupStatus = result.status;
@@ -99,9 +110,12 @@ export async function assessIntake(item: Item, lookup?: ProductLookup) {
             verified = candidate;
             const webFibre = candidate.composition ? material(candidate.composition) : null;
             if (webFibre && compositions.size && !compositions.has(JSON.stringify(webFibre))) reasons.push('Website composition conflicts with source');
-            if (!fibres && !sourceTexts.length) fibres = webFibre;
+            if (!fibres && !sourceTexts.length) {
+              fibres = webFibre;
+              if (materialOnly && candidate.composition) materialComponents = layeredMaterial(candidate.composition);
+            }
             const webColor = namedColor(candidate.color);
-            if (color && webColor && color !== webColor) reasons.push('Website color conflicts with source');
+            if (!materialOnly && color && webColor && color !== webColor) reasons.push('Website color conflicts with source');
             if (!colors.length) color = webColor;
             lookupStatus = 'matched';
           } else {
@@ -115,19 +129,22 @@ export async function assessIntake(item: Item, lookup?: ProductLookup) {
     }
   }
 
-  if (!fibres && compositions.size <= 1) {
+  if (!fibres && !materialComponents && compositions.size <= 1) {
     reasons.push(sourceTexts.length ? 'Incomplete or unsupported composition'
       : verified?.composition ? 'Website composition needs manual classification' : 'Missing composition');
   }
-  if (!color && colors.length <= 1) reasons.push('Missing color');
-  if (condition === 'unknown') reasons.push('Physical condition requires inspection');
+  if (!materialOnly && !color && colors.length <= 1) reasons.push('Missing color');
+  if (!materialOnly && condition === 'unknown') reasons.push('Physical condition requires inspection');
   if (lookupStatus !== 'not_needed' && lookupStatus !== 'matched') reasons.push('Catalog lookup: ' + lookupStatus);
   const tags = tagItem(item.garment_type ?? '', fibres, color, condition);
+  if (materialComponents) tags.fibre_type = 'layered';
   const needsReview = reasons.length > 0;
+  const materialSummary = fibres?.map((f) => `${f.pct}% ${f.fibre}`).join(', ');
   return {
-    tags, material: fibres, color: color || null, status: needsReview ? 'needs_review' as const : 'tagged' as const,
+    tags, material: fibres, materialComponents, materialOnly, color: color || null, status: needsReview ? 'needs_review' as const : 'tagged' as const,
     confidence: needsReview ? 0.4 : 0.95,
-    reason: needsReview ? reasons.join('. ') : `${fibres!.map((f) => `${f.pct}% ${f.fibre}`).join(', ')} → ${tags.stream}`,
+    reason: needsReview ? reasons.join('. ') : materialComponents ? 'Outer and lining materials verified separately'
+      : materialOnly ? materialSummary! : materialSummary + ' → ' + tags.stream,
     evidence: {
       input: { label_text: item.label_text, color: item.color, condition: item.condition, visible_note: item.visible_note },
       workbook: item.catalog, lookup: { status: lookupStatus, matches, attempts, verified },

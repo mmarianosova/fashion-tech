@@ -50,21 +50,21 @@ Start intake for the imported batch on the Intake screen. The separate eight-sty
 demo sample covers single-fibre and blended fabrics, missing or incomplete composition,
 a composition conflict, and a product link with a mismatched UPC. It keeps every
 source row for each selected style. Pass `--source-url` to retain the workbook link. The workbook has no physical condition, so
-these records start without one. Add an optional suffix such as `STYLE_A:damaged`
-only when the physical condition has been observed.
+catalog intake checks only the material. Material records do not enter disposition.
 Import writes the batch atomically to `DATABASE_URL` (default `file:local.db`).
 Repeated batch IDs are rejected. The same style may appear in separate batches.
 
 Intake retains the workbook sheet and row, source composition and color, UPCs,
 product links, and lookup outcome in `intake_assessments`. The Check labels screen
-shows the relevant workbook rows. Uncertain items stay outside disposition
-until a reviewer approves or edits them. Missing physical condition requires
-an edit or rejection.
+shows the relevant workbook rows. Uncertain materials go to Check labels. Separate compositions for outer fabric and lining are retained when the source gives both.
 
 Set `INTAKE_WEB_LOOKUP=1` to enable live product lookup. Intake tries eligible
 Macy's links from the workbook first. When the page cannot verify the variant,
 it searches the Marcus Adler storefront by exact SKU or UPC and verifies the
-identifier again against variant data from the product page. The review audit
+identifier again against variant data from the product page. Set
+`BRAVE_SEARCH_API_KEY` to enable a web-index fallback after the storefront.
+Intake can use explicit product fields tied to a verified SKU or UPC in an
+indexed excerpt or open an allowlisted product URL found by the index. The review audit
 records attempted sources, verified fields and the product link. A mismatched
 UPC in a workbook link is skipped. Catalog pages cannot provide the condition
 of the physical item.

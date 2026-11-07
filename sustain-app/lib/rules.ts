@@ -95,7 +95,7 @@ export function plan(inventory: InvRow[], recyclers: Recycler[], today: string) 
   const skipped: { item_key: string; reason: string }[] = [];
   const due: { row: InvRow; reasons: string[] }[] = [];
   for (const row of inventory) {
-    if (row.status === 'held' || row.status === 'rejected') { skipped.push({ item_key: row.item_key, reason: row.status }); continue; }
+    if (row.status === 'held' || row.status === 'rejected' || row.status === 'material_tagged') { skipped.push({ item_key: row.item_key, reason: row.status }); continue; }
     const reasons = dueReasons(row, today);
     if (!reasons.length) { skipped.push({ item_key: row.item_key, reason: 'not_due' }); continue; }
     if (row.alert_status === 'sent') { skipped.push({ item_key: row.item_key, reason: 'already_flagged' }); continue; }

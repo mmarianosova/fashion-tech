@@ -147,3 +147,34 @@ test('a numeric workbook color is replaced by the exact variant color, but layer
   assert.match(r.reason, /Website composition needs manual classification/);
   assert.equal(r.material, null);
 });
+
+test('index verifies retailer fields only on the exact variant after both site steps fail', async () => {
+  const { createProductLookup } = await import('../lib/product-lookup.ts');
+  const { matchIndexedPage } = await import('../lib/product-index.ts');
+  const url = 'https://www.dsw.com/product/example/42?activeColor=001';
+  const text = 'Color Black\n\n* UPC # 123456789012\n\n##### FEATURES\n\n* 100% polyester';
+  assert.equal(matchIndexedPage({ url, text: text + '\nUPC: 999999999999' }, { style: row.style, upcs: row.upcs, urls: [] }), undefined);
+  assert.equal(matchIndexedPage({ url, text: text.replace('UPC # ', '') }, { style: row.style, upcs: row.upcs, urls: [] }), undefined);
+  const lookup = createProductLookup(async () => { throw new Error('429'); },
+    async () => ({ outcome: 'http_403', matches: [] }), async () => [{ url, text }]);
+  const r = await assessIntake({ ...item, condition: undefined, materialOnly: true, catalog: catalog(row) }, lookup);
+  assert.equal(r.status, 'tagged');
+  assert.equal(r.tags.fibre_type, 'polyester');
+  assert.equal(r.tags.condition, 'unknown');
+  assert.deepEqual(r.evidence.lookup.attempts.map((a) => a.method), ['catalog_url', 'identifier_search', 'index_search']);
+});
+
+test('material-only catalog intake stores outer and lining separately and excludes the item from disposition', async () => {
+  const { db, deps } = await setup();
+  await db.run("INSERT INTO batches (batch_id,created_at) VALUES ('M','2026-11-07')");
+  await db.run("INSERT INTO batch_items (batch_id,item_key) VALUES ('M','M:T123')");
+  await db.run("INSERT INTO intake_inputs VALUES ('M','M:T123',?)", [JSON.stringify(catalog(row))]);
+  await simulateIntake({ ...deps, materialOnly: true, lookupProduct: async () => ({
+    status: 'found', matches: [{ url: link, upc: row.upcs[0], composition: 'Outer: 100% genuine leather / lining: 100% polyester' }],
+  }) }, 'material-session', 'M', { threshold: 0.8, wait: async () => assert.fail('material is complete') });
+  const [result] = await db.all("SELECT result FROM intake_assessments WHERE item_key='M:T123'");
+  assert.deepEqual(JSON.parse(result.result).materialComponents, {
+    outer: [{ fibre: 'leather', pct: 100 }], lining: [{ fibre: 'polyester', pct: 100 }],
+  });
+  assert.equal((await db.all("SELECT status FROM inventory WHERE item_key='M:T123'"))[0].status, 'material_tagged');
+});

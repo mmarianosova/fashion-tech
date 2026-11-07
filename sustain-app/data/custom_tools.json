@@ -24,7 +24,7 @@
               "stream": {"enum": ["mixed", "shred", "denim", "trash"]},
               "fibre_type": {"type": "string"},
               "color_group": {"enum": ["whites", "darks", "brights", "mixed"]},
-              "condition": {"enum": ["wearable", "damaged", "unusable"]}
+              "condition": {"enum": ["wearable", "damaged", "unusable", "unknown"]}
             },
             "required": ["stream", "fibre_type", "color_group", "condition"],
             "additionalProperties": false

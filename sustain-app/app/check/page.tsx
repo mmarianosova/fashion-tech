@@ -16,7 +16,7 @@ function Face({ r, item }: { r: any; item?: any }) {
     <div className="sc-head"><span className="sc-key">{r.item_key}</span><span className="chip-gate">{r.sent_to ? `With ${r.sent_to}` : 'Needs a look'}</span></div>
     {item && <div className="what">{[item.color, item.garment_type].filter(Boolean).join(' ')}</div>}
     <div className="label-box"><div className="k">The label says</div><div className="v">{r.label_text || 'Nothing could be read'}</div></div>
-    <div className="think"><div className="k">The agent thinks</div><div className="big-t">{t ? pileName(t.stream) : 'It is not sure'}</div>
+    <div className="think"><div className="k">The agent thinks</div><div className="big-t">{r.materialOnly ? 'Material needs a check' : t ? pileName(t.stream) : 'It is not sure'}</div>
       <div className="why">{r.reason}</div></div>
     <div className="ask">Is that right?</div>
   </>);
@@ -58,7 +58,7 @@ export default function Check() {
   const queue = (snap?.reviews ?? []).filter((r: any) => r.state === 'pending' && !gone.includes(r.review_id))
     .sort((a: any, b: any) => Number(!!a.sent_to) - Number(!!b.sent_to));
   const top = queue[0], nxt = queue[1];
-  const canApprove = !!top?.proposed_tags && top.proposed_tags.condition !== 'unknown';
+  const canApprove = !!top?.proposed_tags && (top.materialOnly ? top.proposed_tags.fibre_type !== 'unknown' : top.proposed_tags.condition !== 'unknown');
   const workbook = top?.evidence?.workbook;
   const running = !!snap?.runs.find((r: any) => r.agent === 'intake' && !r.finished_at);
   const itemOf = (r: any) => snap?.items.find((i: any) => i.item_key === r.item_key);
@@ -92,16 +92,16 @@ export default function Check() {
           <button className="btn-no" onClick={() => fly('left')}>{Ico.x}Not right</button>
           <button className="btn-yes" disabled={!canApprove} onClick={() => fly('right')}>{Ico.check}Yes, right</button>
         </div>
-        <p className="hint">{canApprove ? 'Swipe right to approve, or left to see other options.' : 'Use Not right to record the item’s condition or choose another action.'}</p>
+        <p className="hint">{canApprove ? 'Swipe right to approve, or left to see other options.' : top.materialOnly ? 'Use Not right to record the material or choose another action.' : 'Use Not right to record the item’s condition or choose another action.'}</p>
         {workbook && <details>
           <summary>Catalog evidence</summary>
           {/^https:\/\/(drive|docs)\.google\.com\//.test(workbook.sourceUrl) &&
             <a href={workbook.sourceUrl} target="_blank" rel="noreferrer">Open workbook</a>}
           <ul>{workbook.rows.map((row: { sheet: string; row: number; composition?: string; color?: string }) =>
-            <li key={`${row.sheet}:${row.row}`}>{row.sheet}, row {row.row} {[row.composition, row.color].filter(Boolean).join(' · ')}</li>)}</ul>
+            <li key={`${row.sheet}:${row.row}`}>{row.sheet}, row {row.row} {[row.composition, top.materialOnly ? null : row.color].filter(Boolean).join(' · ')}</li>)}</ul>
           <p>Website lookup {top.evidence.lookup.status.replaceAll('_', ' ')}</p>
           {top.evidence.lookup.verified && <p>
-            {[top.evidence.lookup.verified.composition, top.evidence.lookup.verified.color].filter(Boolean).join(' · ')}
+            {[top.evidence.lookup.verified.composition, top.materialOnly ? null : top.evidence.lookup.verified.color].filter(Boolean).join(' · ')}
             {' '}<a href={top.evidence.lookup.verified.url} target="_blank" rel="noreferrer">Open product page</a>
           </p>}
         </details>}
@@ -111,11 +111,22 @@ export default function Check() {
 
     {step === 'options' && top && (
       <Sheet title="What should we do with it?" sub={`${top.item_key}: choose a way forward.`} onClose={() => setStep(null)}>
-        <Opt icon={Ico.wrench} title="Change it" help={workbook ? "Record the correct tags and condition" : "Pick the right pile"} onClick={() => setStep('fix')} />
+        <Opt icon={Ico.wrench} title="Change it" help={top.materialOnly ? "Record the material" : workbook ? "Record the correct tags and condition" : "Pick the right pile"} onClick={() => setStep('fix')} />
         <Opt icon={Ico.person} tone="warn" title="Send to someone" help="They decide. It stays here until someone answers." onClick={() => setStep('who')} />
         <Opt icon={Ico.trash} tone="bad" title="Take it out of this batch" help="The agent skips this item" onClick={() => send(top, { decision: 'reject' }, 'Taken out of the batch.')} />
       </Sheet>)}
-    {step === 'fix' && top && workbook && (
+    {step === 'fix' && top?.materialOnly && (
+      <Sheet title="Record the material" sub={top.item_key} onClose={() => setStep('options')}>
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          const fibre_type = String(new FormData(event.currentTarget).get('material') ?? '').trim();
+          if (fibre_type) send(top, { decision: 'edit', tags: { ...top.proposed_tags, fibre_type } }, 'Material saved.');
+        }}>
+          <p><label>Material <input name="material" required /></label></p>
+          <button className="big go" type="submit">Save material</button>
+        </form>
+      </Sheet>)}
+    {step === 'fix' && top && workbook && !top.materialOnly && (
       <Sheet title="Correct the tags" sub={top.item_key} onClose={() => setStep('options')}>
         <CatalogCorrection key={top.review_id} tags={top.proposed_tags}
           onSave={(tags) => send(top, { decision: 'edit', tags }, 'Corrections saved.')} />

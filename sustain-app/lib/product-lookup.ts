@@ -1,4 +1,5 @@
 import { exactProduct, productUrl, type LookupAttempt, type LookupQuery, type ProductLookup, type ProductMatch } from './intake.ts';
+import { matchIndexedPage, type SearchIndex } from './product-index.ts';
 
 type IdentifierSearch = (query: LookupQuery) => Promise<ProductMatch[]>;
 type ReadPage = (url: URL) => Promise<{ outcome: string; matches: ProductMatch[] }>;
@@ -104,11 +105,11 @@ export const manufacturerSearch: IdentifierSearch = async (query) => {
   return pages.flatMap((page) => page.matches);
 };
 
-export function createProductLookup(search?: IdentifierSearch, read = readProductPage): ProductLookup {
+export function createProductLookup(search?: IdentifierSearch, read = readProductPage, index?: SearchIndex): ProductLookup {
   return async (query) => {
     const attempts: LookupAttempt[] = [];
     const exact = (matches: ProductMatch[]) => {
-      const verified = matches.filter((m) => exactProduct(m, query) && (m.composition || m.color));
+      const verified = matches.filter((m) => exactProduct(m, query) && (m.composition || (!query.materialOnly && m.color)));
       return [...new Map(verified.map((m) => [JSON.stringify([m.composition, m.color]), m])).values()];
     };
     const direct: ProductMatch[] = [];
@@ -123,17 +124,35 @@ export function createProductLookup(search?: IdentifierSearch, read = readProduc
     if (matches.length) return { status: 'found', matches, attempts };
 
     const target = [query.style, ...query.upcs].join(', ');
-    if (!search) {
-      attempts.push({ method: 'identifier_search', target, outcome: 'not_configured' });
-      return { status: 'unavailable', attempts };
+    let searched = false;
+    if (search) {
+      try {
+        const found = exact(await search(query));
+        searched = true;
+        attempts.push({ method: 'identifier_search', target, outcome: found.length ? 'verified' : 'no_verified_match' });
+        if (found.length) return { status: 'found', matches: found, attempts };
+      } catch {
+        attempts.push({ method: 'identifier_search', target, outcome: 'unavailable' });
+      }
     }
-    try {
-      const found = exact(await search(query));
-      attempts.push({ method: 'identifier_search', target, outcome: found.length ? 'verified' : 'no_verified_match' });
-      return found.length ? { status: 'found', matches: found, attempts } : { status: 'not_found', attempts };
-    } catch {
-      attempts.push({ method: 'identifier_search', target, outcome: 'unavailable' });
-      return { status: 'unavailable', attempts };
+    if (index) {
+      try {
+        const pages = (await index(query)).slice(0, 24);
+        const indexed = pages.map((page) => matchIndexedPage(page, query)).filter((match): match is ProductMatch => !!match);
+        // Open allowlisted result URLs when the index only provides discovery.
+        const verifiedUrls = new Set(indexed.map((match) => match.url));
+        const urls = [...new Set(pages.map((page) => productUrl(page.url)?.href))]
+          .filter((url): url is string => !!url && !verifiedUrls.has(url));
+        const readMatches = await Promise.all(urls.slice(0, 4).map((url) => read(new URL(url))));
+        const found = exact([...indexed, ...readMatches.flatMap((page) => page.matches)]);
+        searched = true;
+        attempts.push({ method: 'index_search', target, outcome: found.length ? 'verified' : 'no_verified_match' });
+        if (found.length) return { status: 'found', matches: found, attempts };
+      } catch {
+        attempts.push({ method: 'index_search', target, outcome: 'unavailable' });
+      }
     }
+    if (!search && !index) attempts.push({ method: 'identifier_search', target, outcome: 'not_configured' });
+    return { status: searched ? 'not_found' : 'unavailable', attempts };
   };
 }

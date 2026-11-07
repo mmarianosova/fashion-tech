@@ -5,7 +5,7 @@ import { assessIntake, type CatalogInput, type ProductLookup } from './intake.ts
 
 export const PENDING = Symbol('pending'); // tool result withheld until a person decides
 
-export type Ctx = { db: Db; now: () => string; callId: string; sessionId: string; newId: (prefix: string) => string; lookupProduct?: ProductLookup };
+export type Ctx = { db: Db; now: () => string; callId: string; sessionId: string; newId: (prefix: string) => string; materialOnly?: boolean; lookupProduct?: ProductLookup };
 
 const STREAMS = ['mixed', 'shred', 'denim', 'trash'];
 const GROUPS = ['whites', 'darks', 'brights', 'mixed'];
@@ -14,8 +14,8 @@ const ALERTS = ['donate_recycle_due', 'review_waiting', 'dispute_deadline', 'del
 
 export class ToolError extends Error {}
 const need = (c: unknown, msg: string) => { if (!c) throw new ToolError(msg); };
-export const isTags = (t: any) =>
-  t && STREAMS.includes(t.stream) && GROUPS.includes(t.color_group) && CONDS.includes(t.condition) && typeof t.fibre_type === 'string';
+export const isTags = (t: any, materialOnly = false) =>
+  t && STREAMS.includes(t.stream) && GROUPS.includes(t.color_group) && (materialOnly ? t.condition === 'unknown' : CONDS.includes(t.condition)) && typeof t.fibre_type === 'string';
 
 async function upsertInventory(c: Ctx, key: string, tags: any, status: string, conf: number, reason: string, src: any) {
   await c.db.run(
@@ -48,7 +48,7 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
       const params = [c.sessionId, i.batch_id, r.item_key];
       let assessment = p((await c.db.all('SELECT result FROM intake_assessments WHERE session_id=? AND batch_id=? AND item_key=?', params))[0]?.result);
       if (!assessment) {
-        assessment = await assessIntake({ ...item, catalog: p<CatalogInput>(r.catalog) ?? undefined }, c.lookupProduct);
+        assessment = await assessIntake({ ...item, catalog: p<CatalogInput>(r.catalog) ?? undefined, materialOnly: !!r.catalog && c.materialOnly }, c.lookupProduct);
         await c.db.run('INSERT OR IGNORE INTO intake_assessments (session_id,batch_id,item_key,result) VALUES (?,?,?,?)', [...params, j(assessment)]);
         assessment = p((await c.db.all('SELECT result FROM intake_assessments WHERE session_id=? AND batch_id=? AND item_key=?', params))[0]?.result);
       }
@@ -60,12 +60,12 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
 
   async save_tags(c, i) {
     need(typeof i?.item_key === 'string', 'item_key required');
-    need(isTags(i.tags), 'invalid tags');
     need(typeof i.confidence === 'number' && i.confidence >= 0 && i.confidence <= 1, 'confidence 0..1 required');
     const bi = await batchItem(c, i.item_key);
     need(bi, `unknown item ${i.item_key}`);
     const assessment = p(bi.assessment);
     need(!bi.catalog || assessment, 'get_batch must assess this catalog item first');
+    need(isTags(i.tags, assessment?.materialOnly), 'invalid tags');
     if (assessment) {
       const review = (await c.db.all("SELECT state,decided_tags FROM reviews WHERE session_id=? AND batch_id=? AND item_key=? ORDER BY rowid DESC LIMIT 1",
         [c.sessionId, bi.batch_id, i.item_key]))[0];
@@ -75,7 +75,7 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
     }
     await c.db.run(`UPDATE batch_items SET state='tagged',stream=?,fibre_type=?,color_group=?,confidence=?,reason=? WHERE batch_id=? AND item_key=?`,
       [i.tags.stream, i.tags.fibre_type, i.tags.color_group, i.confidence, i.reason ?? '', bi.batch_id, i.item_key]);
-    await upsertInventory(c, i.item_key, i.tags, 'tagged', i.confidence, i.reason ?? '', bi);
+    await upsertInventory(c, i.item_key, i.tags, assessment?.materialOnly ? 'material_tagged' : 'tagged', i.confidence, i.reason ?? '', bi);
     return { ok: true };
   },
 
@@ -104,7 +104,7 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
 
   async list_inventory(c, i) {
     need(typeof i?.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(i.today), 'today must be YYYY-MM-DD');
-    const rows = await c.db.all('SELECT * FROM inventory ORDER BY item_key');
+    const rows = await c.db.all("SELECT * FROM inventory WHERE status <> 'material_tagged' ORDER BY item_key");
     return { today: i.today, items: rows.map((r) => ({
       item_key: r.item_key, category: r.category, tags: { stream: r.stream, fibre_type: r.fibre_type, color_group: r.color_group, condition: r.condition },
       location: r.location, season: r.season, received_date: r.received_date, return_window_close: r.return_window_close,

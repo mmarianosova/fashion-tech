@@ -7,7 +7,7 @@ import { PENDING, ToolError, tools, isTags } from './tools.ts';
 
 import type { ProductLookup } from './intake.ts';
 
-export type Deps = { lookupProduct?: ProductLookup; db: Db; zoo: ZooClient; now: () => string; newId: (prefix: string) => string };
+export type Deps = { materialOnly?: boolean; lookupProduct?: ProductLookup; db: Db; zoo: ZooClient; now: () => string; newId: (prefix: string) => string };
 
 export type AppEvent = {
   id: string; cursor: string; type: string;
@@ -58,7 +58,7 @@ async function runCustomTool(d: Deps, sessionId: string, ev: AppEvent) {
     try {
       const fn = tools[ev.name!];
       if (!fn) throw new ToolError(`unknown tool ${ev.name}`);
-      result = await fn({ db: d.db, now: d.now, callId, sessionId, newId: d.newId, lookupProduct: d.lookupProduct }, ev.input);
+      result = await fn({ db: d.db, now: d.now, callId, sessionId, newId: d.newId, lookupProduct: d.lookupProduct, materialOnly: d.materialOnly }, ev.input);
       if (result === PENDING) return; // hold_for_review: resolved later by resolveReview
     } catch (e: any) {
       isError = true; result = { error: e instanceof ToolError ? e.message : 'internal_error' };
@@ -77,12 +77,15 @@ export async function resolveReview(d: Deps, reviewId: string, decision: 'approv
   if (r.state !== 'pending') return { already: true, state: r.state };
   const proposed = p(r.proposed_tags);
   const final = decision === 'reject' ? null : (tags ?? proposed);
-  if (decision !== 'reject' && !isTags(final)) throw new Error('Complete and valid tags are required. Edit the proposed tags or reject the item.');
+  const assessment = p((await d.db.all('SELECT result FROM intake_assessments WHERE session_id=? AND batch_id=? AND item_key=?',
+    [r.session_id, r.batch_id, r.item_key]))[0]?.result);
+  const materialOnly = assessment?.materialOnly === true;
+  if (decision !== 'reject' && (!isTags(final, materialOnly) || (materialOnly && (!final.fibre_type.trim() || final.fibre_type === 'unknown')))) throw new Error('Complete and valid tags are required. Edit the proposed tags or reject the item.');
   const state = decision === 'approve' ? 'approved' : decision === 'edit' ? 'edited' : 'rejected';
   await d.db.run('UPDATE reviews SET state=?,decided_tags=?,decided_at=? WHERE review_id=?', [state, j(final), d.now(), reviewId]);
   if (final) {
-    await d.db.run(`UPDATE inventory SET stream=?,fibre_type=?,color_group=?,condition=?,status='tagged' WHERE item_key=?`,
-      [final.stream, final.fibre_type, final.color_group, final.condition, r.item_key]);
+    await d.db.run(`UPDATE inventory SET stream=?,fibre_type=?,color_group=?,condition=?,status=? WHERE item_key=?`,
+      [final.stream, final.fibre_type, final.color_group, final.condition, materialOnly ? 'material_tagged' : 'tagged', r.item_key]);
     await d.db.run(`UPDATE batch_items SET state='tagged',stream=?,fibre_type=?,color_group=? WHERE batch_id=? AND item_key=?`,
       [final.stream, final.fibre_type, final.color_group, r.batch_id, r.item_key]);
   } else {
