@@ -35,6 +35,7 @@ export default function Home() {
         <Row href="/check" ic={Ico.label} t="All labels" d={`${snap.items.length} in today’s batch`} />
         <Row href="/pickups" ic={Ico.truck} t="All pickups" d={nPick ? plural(nPick, 'pickup') : 'None yet'} />
         <Row href="/messages" ic={Ico.bell} t="Messages" d={unread ? plural(unread, 'new alert') : 'No new alerts'} />
+        <Row href="/guide" ic={Ico.book} t="Pile guide" d="What goes where" />
         <Row href="/history" ic={Ico.clock} t="History" d="Past decisions you can change" />
       </div>
       <div className="foot"><Link href="/team">For the tech team</Link></div>

@@ -4,6 +4,7 @@ import { Ico } from '@/components/icons';
 import { Sheet, Opt, useToast } from '@/components/Sheet';
 import { SwipeCard, type Dir } from '@/components/Swipe';
 import Top from '@/components/Top';
+import { MAT, MatIcon } from '@/components/Mat';
 import { fixTags, PILE, pileName, plural } from '@/lib/plain';
 import { post, useAppState } from '@/lib/useAppState';
 
@@ -15,8 +16,8 @@ function Face({ r, item }: { r: any; item?: any }) {
     <div className="sc-head"><span className="sc-key">{r.item_key}</span><span className="chip-gate">{r.sent_to ? `With ${r.sent_to}` : 'To review'}</span></div>
     {item && <div className="what">{[item.color, item.garment_type].filter(Boolean).join(' ')}</div>}
     <div className="label-box"><div className="k">The label says</div><div className="v">{r.label_text || 'Nothing could be read'}</div></div>
-    <div className="think"><div className="k">Suggested category</div><div className="big-t">{t ? pileName(t.stream) : 'Not sure'}</div>
-      <div className="why">{r.reason}</div></div>
+    <div className="think"><div className="k">Suggested category</div>{t ? <div className="matline"><MatIcon k={t.stream} /><div><div className="big-t">{pileName(t.stream)}</div><div className="why">{MAT[t.stream]?.desc}</div></div></div> : <div className="big-t">Not sure</div>}
+      <div className="why" style={{ marginTop: 8 }}>{r.reason}</div></div>
     <div className="ask">Is that right?</div>
   </>);
 }

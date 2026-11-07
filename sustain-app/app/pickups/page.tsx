@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Ico } from '@/components/icons';
 import { Sheet, Opt, useToast } from '@/components/Sheet';
+import { MAT, MatIcon, ROUTE_MAT } from '@/components/Mat';
 import Top from '@/components/Top';
 import { addDays, fmtDate, plural, RESCHEDULE_DAYS, routeName } from '@/lib/plain';
 import { post, useAppState } from '@/lib/useAppState';
@@ -15,6 +16,7 @@ function Card({ a, partner, onYes, onDate, onNo, onMore }: { a: any; partner?: a
   const day = i.deadline ? new Date(i.deadline + 'T00:00:00Z').getUTCDate() : '';
   return (<div className="pick">
     <div className="head"><b>{routeName(i.route)}</b><span className="chip-gate" style={{ marginLeft: 0 }}>{a.sent_to ? `With ${a.sent_to}` : 'To review'}</span></div>
+    <div className="matrow"><MatIcon k={ROUTE_MAT[i.route]} /><div><b>{MAT[ROUTE_MAT[i.route]]?.name}</b><span className="d">{MAT[ROUTE_MAT[i.route]]?.desc}</span></div></div>
     <div className="when"><div className="cal"><span>{mon}</span><strong>{day}</strong></div>
       <div><div className="k">Hand over by</div><div className="who">{partner?.name?.replace(' (fictional)', '') ?? i.partner_id}</div>{partner?.address && <div className="addr">{Ico.pin}{partner.address}</div>}</div></div>
     <div><div className="k" style={{ marginBottom: 6 }}>Items {ids.length}</div><div className="ids">{ids.slice(0, 6).map((x) => <span key={x}>{x}</span>)}{ids.length > 6 && <span>+{ids.length - 6} more</span>}</div></div>
@@ -70,7 +72,7 @@ export default function Pickups() {
         <div className="done"><div className="tick">{Ico.check}</div><h2>Nothing to review</h2><p>When items are due to leave, their pickups show up here.</p></div>
       ) : (<>
         <div className="count">{plural(booked.length, 'pickup')} booked</div>
-        {booked.map((p: any) => (<div className="note" key={p.booking_id}><div className="note-ico n-ok">{Ico.truck}</div>
+        {booked.map((p: any) => (<div className="note" key={p.booking_id}><MatIcon k={ROUTE_MAT[p.route]} />
           <div><h4>{routeName(p.route)}</h4><p>{partner(p.partner_id)?.name?.replace(' (fictional)', '') ?? p.partner_id}</p>
             <p className="nx">Hand over by {fmtDate(p.deadline)} · {plural(p.items.length, 'item')}</p>
             <button className="alt" style={{ marginTop: 8, minHeight: 44, padding: '8px 16px' }} onClick={() => setDoc(p)}>Open pickup request</button></div></div>))}
