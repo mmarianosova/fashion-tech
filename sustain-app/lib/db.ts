@@ -13,6 +13,11 @@ CREATE TABLE IF NOT EXISTS reviews (review_id TEXT PRIMARY KEY, batch_id TEXT, i
 CREATE TABLE IF NOT EXISTS approvals (approval_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, tool TEXT NOT NULL, input TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL, decided_at TEXT, sent_to TEXT, resched_to TEXT, sent_at TEXT, replied INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS pickups (booking_id TEXT PRIMARY KEY, partner_id TEXT, route TEXT, items TEXT, lots TEXT, deadline TEXT, created_at TEXT);
 CREATE TABLE IF NOT EXISTS alerts (alert_id TEXT PRIMARY KEY, type TEXT NOT NULL, items TEXT NOT NULL, location TEXT, deadline TEXT, next_step TEXT, recycler_address TEXT, summary TEXT NOT NULL, created_at TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, ref_kind TEXT, from_name TEXT);
+CREATE TRIGGER IF NOT EXISTS flag_alerted_inventory AFTER INSERT ON alerts
+WHEN NEW.type IN ('donate_recycle_due','review_waiting','dispute_deadline','delay_risk')
+BEGIN
+  UPDATE inventory SET alert_status='sent' WHERE item_key IN (SELECT value FROM json_each(NEW.items));
+END;
 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, cursor TEXT, type TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(session_id, cursor));
 CREATE TABLE IF NOT EXISTS handled_calls (call_id TEXT PRIMARY KEY, result TEXT NOT NULL, is_error INTEGER NOT NULL DEFAULT 0, resolved INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS runs (session_id TEXT PRIMARY KEY, agent TEXT NOT NULL, ref TEXT, started_at TEXT NOT NULL, finished_at TEXT, status TEXT, summary TEXT, cost_usd REAL);

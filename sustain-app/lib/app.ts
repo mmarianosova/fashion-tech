@@ -35,7 +35,7 @@ async function init(): Promise<App> {
   const now = () => new Date().toISOString();
   const newId = (prefix: string) => `${prefix}_${randomUUID().slice(0, 8)}`;
   const recyclers = loadRecyclers(dataDir);
-  return { db, zoo, deps: { db, zoo, now, newId }, mcp: { db, recyclers, now, newId } };
+  return { db, zoo, deps: { db, zoo, now, newId }, mcp: { db, recyclers, now, newId, today: env.today } };
 }
 
 // In fake mode the "person" decisions come from the UI; the simulator polls the DB until they arrive.
@@ -65,12 +65,16 @@ export async function startRun(kind: 'intake' | 'disposition', opts: { batchId?:
   }
   const message = kind === 'intake'
     ? `Process batch ${batchId} with a confidence threshold of ${threshold}. Tag every item and hold anything you are not sure about. Finish with the summary.`
-    : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.${Object.keys(overrides).length ? ` A person moved some items to a later hand-over date: use these deadlines instead of today plus 7 days: ${Object.entries(overrides).map(([k, v]) => `${k}=${v}`).join(', ')}.` : ''}`;
+    : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.`;
   const agentId = kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
   const idem = `${kind}-${a.deps.newId('run')}`;
+  const dateOverrides = Object.entries(overrides).map(([key, date]) => `${key}=${date}`);
+  const sessionMessage = dateOverrides.length
+    ? `${message} A person moved some items to a later hand-over date: use these deadlines instead of today plus 7 days: ${dateOverrides.join(', ')}.`
+    : message;
   const { sessionId } = env.mode === 'real'
-    ? await a.zoo.createSession(agentId!, message, idem)
-    : await a.zoo.createSession('fake', message, idem);
+    ? await a.zoo.createSession(agentId!, sessionMessage, idem)
+    : await a.zoo.createSession('fake', sessionMessage, idem);
   await a.db.run('INSERT INTO runs (session_id,agent,ref,started_at) VALUES (?,?,?,?)', [sessionId, kind, batchId, a.deps.now()]);
   if (kind === 'intake') {
     await a.db.run("UPDATE batch_items SET state='pending' WHERE batch_id=? AND state<>'tagged'", [batchId]);

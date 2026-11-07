@@ -65,7 +65,12 @@ export const shouldHold = (label: { legible: boolean; sumOk: boolean }, conflict
   !label.legible || !label.sumOk || conflict;
 
 // ---- dates (ISO strings, UTC) ----
-const day = (s?: string | null) => (s ? Date.parse(s + 'T00:00:00Z') : NaN);
+const day = (s?: string | null) => {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return NaN;
+  const ms = Date.parse(s + 'T00:00:00Z');
+  return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === s ? ms : NaN;
+};
+export const isCalendarDate = (s: unknown): s is string => typeof s === 'string' && Number.isFinite(day(s));
 const daysBetween = (a: string, b: string) => Math.floor((day(a) - day(b)) / 86400000);
 export const addDays = (s: string, n: number) => new Date(day(s) + n * 86400000).toISOString().slice(0, 10);
 
@@ -85,8 +90,12 @@ export function dueReasons(row: InvRow, today: string) {
 }
 export function routeFor(row: Pick<InvRow, 'category' | 'tags'>) {
   const t = row.tags;
+  if (!t || !['trash', 'shred', 'denim', 'mixed'].includes(t.stream) ||
+      !['wearable', 'damaged', 'unusable'].includes(t.condition) ||
+      !['whites', 'darks', 'brights', 'mixed'].includes(t.color_group) ||
+      !t.fibre_type?.trim() || !row.category?.trim()) return 'review';
   if (t.stream === 'trash' || t.condition === 'unusable') return 'dispose';
-  if (t.condition === 'wearable' && !NO_DONATE.has(row.category)) return 'donate';
+  if (t.condition === 'wearable' && !NO_DONATE.has(row.category.trim().toLowerCase())) return 'donate';
   return ({ shred: 'recycle_shred', denim: 'recycle_denim', mixed: 'recycle_mixed' } as Record<string, string>)[t.stream];
 }
 
@@ -95,14 +104,15 @@ export function plan(inventory: InvRow[], recyclers: Recycler[], today: string) 
   const skipped: { item_key: string; reason: string }[] = [];
   const due: { row: InvRow; reasons: string[] }[] = [];
   for (const row of inventory) {
-    if (row.status === 'held') { skipped.push({ item_key: row.item_key, reason: 'held' }); continue; }
+    if (row.status === 'held' || row.status === 'rejected') { skipped.push({ item_key: row.item_key, reason: row.status }); continue; }
     const reasons = dueReasons(row, today);
     if (!reasons.length) { skipped.push({ item_key: row.item_key, reason: 'not_due' }); continue; }
     if (row.alert_status === 'sent') { skipped.push({ item_key: row.item_key, reason: 'already_flagged' }); continue; }
+    if (row.status !== 'tagged') { skipped.push({ item_key: row.item_key, reason: 'not_tagged' }); continue; }
     due.push({ row, reasons });
   }
   const routes = due.map(({ row, reasons }) => ({
-    item_key: row.item_key, route: routeFor(row)!, color_group: row.tags.color_group, reasons: [...reasons].sort(),
+    item_key: row.item_key, route: row.location?.trim() ? routeFor(row) : 'review', color_group: row.tags.color_group, reasons: [...reasons].sort(),
   }));
   const rows = new Map(due.map((d) => [d.row.item_key, d.row]));
   const byRoute = new Map<string, string[]>();
@@ -113,9 +123,10 @@ export function plan(inventory: InvRow[], recyclers: Recycler[], today: string) 
   for (const route of [...byRoute.keys()].sort()) {
     const items = byRoute.get(route)!.sort();
     if (route === 'dispose') { escalations.push({ items, reason: 'dispose_confirm' }); continue; }
-    const partner = recyclers.find((r) => r.accepts.includes(route));
-    if (!partner) { escalations.push({ items, reason: 'no_partner' }); continue; }
-    if (items.length < partner.min_items) { escalations.push({ items, reason: 'below_minimum' }); continue; }
+    if (route === 'review') { escalations.push({ items, reason: 'invalid_inventory' }); continue; }
+    const candidates = recyclers.filter((r) => r.accepts.includes(route));
+    const partner = candidates.find((r) => items.length >= r.min_items);
+    if (!partner) { escalations.push({ items, reason: candidates.length ? 'below_minimum' : 'no_partner' }); continue; }
     const lots: Record<string, string[]> = {};
     if (route === 'recycle_shred') for (const k of items) (lots[rows.get(k)!.tags.color_group] ||= []).push(k);
     const sortedLots = Object.fromEntries(Object.keys(lots).sort().map((g) => [g, lots[g].sort()]));
