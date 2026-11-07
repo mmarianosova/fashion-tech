@@ -1,5 +1,9 @@
 # Fashion Tech Hackathon: textile sustainability flow
 
+<img src="brand/svg/sortix-logo.svg" alt="Sortix" height="64">
+
+> **New app name and logo: Sortix.** The new logo and its assets are in [`brand/`](brand/BRAND.md). The app itself has not been updated to use them yet.
+
 Scan garment labels, sort items for recycling, notify the right people. Two agents run on ZooWork Managed Agents; this repo holds the interface, backend and everything needed to configure the agents.
 
 | Folder | What |
