@@ -234,6 +234,7 @@ button.note.tap{width:100%;text-align:left;font:inherit;font-weight:400;color:in
 .gcard{display:flex;gap:14px;align-items:flex-start;background:#fff;border-radius:20px;box-shadow:var(--shadow);padding:16px;margin-bottom:12px}
 .gcard b{display:block;font-size:1rem;font-weight:800}.gcard p{margin:4px 0 6px;font-size:.875rem;line-height:1.4;color:var(--ink)}.gcard small{font-size:.75rem;color:var(--mute)}
 .chk .mat{margin-left:-2px}
+.demo-strip{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}.demo-strip.live{background:var(--blue-soft);color:var(--blue-ink)}
 </style></head>
 <body class="demo"><div class="app" id="app"></div>
 <script>
@@ -295,13 +296,16 @@ const SEED = [
     app: { id: 'seed-pickup', input: { route: 'recycle_shred', partner_id: Object.keys(PARTNERS)[0], items: shredItems, deadline: addDays(FRAMES[0].today, 3) } } },
 ];
 let hid = 0;
+const seeds = () => (st.mode === 'demo' ? SEED : []);
 
-const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [], hist: [], hf: 'all', removed: {}, added: {}, reopen: null, edit: {} };
-const F = () => FRAMES[st.fi];
+const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [], hist: [], hf: 'all', removed: {}, added: {}, reopen: null, edit: {}, mode: 'demo', conn: '' };
+const BLANK = () => ({ today: new Date().toISOString().slice(0, 10), items: [], reviews: [], approvals: [], pickups: [], alerts: [] });
+const LIVE = BLANK();
+const F = () => (st.mode === 'live' ? LIVE : FRAMES[st.fi]);
 const pendRev = () => F().reviews.filter((r) => r.state === 'pending');
 const pendApp = () => F().approvals.filter((a) => a.state === 'pending');
 // Demo notice: a pickup nobody confirmed is moved to a later date, and the person is told so.
-const notice = () => { const a = pendApp()[0]; if (!a || !a.input) return []; const i = a.input;
+const notice = () => { if (st.mode !== 'demo') return []; const a = pendApp()[0]; if (!a || !a.input) return []; const i = a.input;
   return [{ id: 'resched-' + a.id, type: 'rescheduled', ref: 'approval', items: i.items || [], summary: `No action was taken on ${ROUTE[i.route] || i.route} (${plural((i.items || []).length, 'item')}), so it was rescheduled to ${fmt(addDays(i.deadline, 7))}. Verify it or change it.`, next: 'Open it in Pickups to review and choose Book pickup, Reschedule or Don’t book.' }]; };
 // A decided item can be reopened from History; then it is the one on screen instead of the next waiting item.
 const curRev = () => (st.reopen && st.reopen.rev) || queue(pendRev())[0];
@@ -318,7 +322,7 @@ const unread = () => alerts().filter((a) => !st.seen[a.id]).length;
 function stopPlay() { clearInterval(st.timer); st.timer = null; }
 // The work runs by itself in the background; it stops only where a person has to decide.
 function play() {
-  if (st.timer) return;
+  if (st.timer || st.mode === 'live') return;
   st.timer = setInterval(() => {
     if (F().gate || st.fi >= FRAMES.length - 1) { stopPlay(); render(); return; }
     st.fi++; render();
@@ -327,8 +331,11 @@ function play() {
 }
 // A person decided the current item: the run moves on.
 function decided(msg, rec) {
+  if (rec && rec.ev) emit({ ...rec.ev, ...(st.reopen ? { reopened: true } : {}) });
   if (st.reopen) { st.edit[st.reopen.rec.id] = { status: rec.status, tone: rec.tone, sub: rec.sub }; st.reopen = null; st.screen = 'history'; st.exit = null; st.sheet = null; say(msg); render(); return; }
-  if (rec) st.hist.unshift(rec); st.fi = Math.min(st.fi + 1, FRAMES.length - 1); st.exit = null; st.sheet = null; say(msg); play(); render(); }
+  if (rec) st.hist.unshift(rec);
+  if (st.mode === 'live') { if (rec && rec.src) { rec.src.state = 'decided'; rec.src._t = Date.now(); } st.exit = null; st.sheet = null; say(msg); render(); return; }
+  st.fi = Math.min(st.fi + 1, FRAMES.length - 1); st.exit = null; st.sheet = null; say(msg); play(); render(); }
 function say(m) { st.toast = m; clearTimeout(say.t); say.t = setTimeout(() => { st.toast = null; render(); }, 2400); }
 
 const topbar = (title, sub, back = 'home') => `<header class="top"><button class="back" data-act="${back}" aria-label="Back">${I.back}</button><div><h1>${esc(title)}</h1>${sub ? `<p class="lede">${esc(sub)}</p>` : ''}</div></header>`;
@@ -409,7 +416,7 @@ const msgTarget = (a) => (a.type === 'rescheduled' ? ['pickups', 'Verify or chan
 
 function history() {
   const seenAlerts = alerts().filter((a) => st.seen[a.id]).map((a) => ({ k: 'alert', id: a.id, title: msgTitle(a), sub: a.summary, status: 'Seen', tone: 'seen' }));
-  const all = [...st.hist, ...SEED].map((h) => ({ ...h, ...(st.edit[h.id] || {}) }));
+  const all = [...st.hist, ...seeds()].map((h) => ({ ...h, ...(st.edit[h.id] || {}) }));
   const labels = all.filter((h) => h.k === 'label'), picks = all.filter((h) => h.k === 'pickup'), f = st.hf;
   const row = (h, ic, act, word) => `<div class="hrow"><span class="ic">${ic}</span><span class="t"><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span><span class="r"><span class="st st-${h.tone}">${esc(h.status)}</span><button class="chg" data-act="${act}" data-arg="${esc(h.id || '')}">${word}</button></span></div>`;
   const grp = (title, rows) => `<div class="hgroup"><div class="sect">${title}</div><div class="hlist">${rows}</div></div>`;
@@ -430,7 +437,7 @@ function sheets() {
   if (st.sheet === 'rev-fix' && rv) return sheet('Which pile is it?', rv.item + ' — ' + (rv.label || 'no label text'), Object.entries(PILE).map(([k, v]) => opt(I.label, v[0], v[1], 'rev-pile', k === 'trash' ? 'bad' : '', v[0])).join(''));
   if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the list until they answer.', who('rev-send'), 'rev-options');
   if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), (st.reopen ? '' : opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn')) + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Don’t book it', 'The items come back on the next run.', 'app-deny', 'bad'));
-  if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The pickup is proposed again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
+  if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The pickup is proposed again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', addDays(ap.input.deadline, n))).join(''), 'app-options');
   if (st.sheet === 'app-edit' && ap) { const all = baseItems(ap), gone = st.removed[ap.id] || [], more = addable(ap);
     return sheet('Edit items', 'Tap an item to leave it out of this pickup.', all.map((x) => `<button class="chk ${gone.includes(x) ? '' : 'on'}" data-act="app-toggle" data-arg="${esc(x)}"><span class="bx">${gone.includes(x) ? '' : I.check}</span>${thumb(x)}${esc(x)} ${esc(garment(x))}</button>`).join('')
       + `<div class="sect">Add more items</div>` + (more.length ? more.map((x) => `<button class="chk add" data-act="app-add" data-arg="${esc(x)}"><span class="bx">${I.plus}</span>${thumb(x)}${esc(x)} ${esc(garment(x))}</button>`).join('') : `<p class="msg-body">No other items match this pickup.</p>`)
@@ -443,7 +450,9 @@ function sheets() {
 
 function render() {
   if (st.dragging) return;
-  const strip = `<div class="demo-strip">Demo with sample data. Whatever you choose, the story continues the same way.<button data-act="restart">Restart</button></div>`;
+  const strip = CFG.embed ? '' : st.mode === 'live'
+    ? `<div class="demo-strip live">Live · ${esc(CFG.api ? (st.conn || 'connecting') : 'waiting for agent input')}<button data-act="export">Export outputs (${OUT.length})</button>${CFG.locked ? '' : '<button data-act="demo">Back to demo</button>'}</div>`
+    : `<div class="demo-strip">Demo with sample data. Whatever you choose, the story continues the same way.<button data-act="restart">Restart</button><button data-act="clear">Clear demo data</button></div>`;
   const sbar = `<div class="sbar" aria-hidden="true">9:41<span>${I.sig}${I.wifi}${I.batt}</span></div>`;
   const body = st.screen === 'check' ? check() : st.screen === 'pickups' ? pickups() : st.screen === 'messages' ? messages() : st.screen === 'history' ? history() : st.screen === 'guide' ? guide() : home();
   document.getElementById('app').innerHTML = sbar + strip + `<div class="scroll">${body}</div>` + tabbar() + sheets() + (st.toast ? `<div class="toast" role="status">${esc(st.toast)}</div>` : '');
@@ -454,33 +463,37 @@ function act(a, arg) {
   const rv = curRev(), ap = curApp();
   const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages', history: 'history', guide: 'guide' };
   if (go[a]) { st.reopen = null; st.screen = go[a]; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; return; }
-  const pickRec = (status, tone, sub) => { const i = ap.input || {}; return { id: 'h' + (++hid), app: { id: ap.id, input: { ...ap.input, items: itemsOf(ap) } }, k: 'pickup', title: ROUTE[i.route] || i.route, sub: sub || `${(PARTNERS[i.partner_id] || {}).name || ''} · ${plural(itemsOf(ap).length, 'item')} · ${fmt(i.deadline)}`, status, tone }; };
-  const labRec = (status, tone, sub) => ({ id: 'h' + (++hid), rev: rv, k: 'label', title: `${rv.item} ${garment(rv.item)}`.trim(), sub, status, tone });
+  const pickRec = (status, tone, sub, d = {}) => { const i = ap.input || {}; return { id: 'h' + (++hid), src: ap, ev: { type: 'approval.decision', approval_id: ap.id, route: i.route, partner_id: i.partner_id, items: itemsOf(ap), items_added: st.added[ap.id] || [], items_removed: st.removed[ap.id] || [], ...d }, app: { id: ap.id, input: { ...ap.input, items: itemsOf(ap) } }, k: 'pickup', title: ROUTE[i.route] || i.route, sub: sub || `${(PARTNERS[i.partner_id] || {}).name || ''} · ${plural(itemsOf(ap).length, 'item')} · ${fmt(i.deadline)}`, status, tone }; };
+  const labRec = (status, tone, sub, d = {}) => ({ id: 'h' + (++hid), src: rv, ev: { type: 'review.decision', review_id: rv.id, item: rv.item, ...d }, rev: rv, k: 'label', title: `${rv.item} ${garment(rv.item)}`.trim(), sub, status, tone });
   switch (a) {
     case 'restart': stopPlay(); Object.assign(st, { reopen: null, edit: {}, fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null, hist: [], hf: 'all', removed: {}, added: {}, reopen: null, edit: {} }); st.rt.forEach(clearTimeout); st.rt = []; render(); play(); break;
     case 'hf': st.hf = arg; render(); break;
+    case 'clear': setMode('live'); break;
+    case 'demo': setMode('demo'); break;
+    case 'export': exportOutputs(); break;
     case 'hist-back': st.reopen = null; st.sheet = null; st.screen = 'history'; render(); break;
-    case 'change': { const rec = [...st.hist, ...SEED].find((h) => h.id === arg); if (!rec) break; st.reopen = { rec, rev: rec.rev, app: rec.app }; st.screen = rec.k === 'label' ? 'check' : 'pickups'; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; break; }
+    case 'change': { const rec = [...st.hist, ...seeds()].find((h) => h.id === arg); if (!rec) break; st.reopen = { rec, rev: rec.rev, app: rec.app }; st.screen = rec.k === 'label' ? 'check' : 'pickups'; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; break; }
     case 'app-edit': st.sheet = 'app-edit'; render(); break;
     case 'app-add': (st.added[ap.id] = st.added[ap.id] || []).push(arg); render(); break;
     case 'app-toggle': { const g = st.removed[ap.id] || []; st.removed[ap.id] = g.includes(arg) ? g.filter((x) => x !== arg) : [...g, arg]; if (st.removed[ap.id].length >= baseItems(ap).length) st.removed[ap.id] = g; render(); break; }
     case 'closesheet': st.sheet = null; render(); break;
-    case 'msgopen': st.seen[arg] = 1; st.open = arg; st.sheet = 'msg'; render(); break;
+    case 'msgopen': if (!st.seen[arg]) emit({ type: 'alert.read', alert_id: arg }); st.seen[arg] = 1; st.open = arg; st.sheet = 'msg'; render(); break;
     case 'doc': st.doc = arg; st.sheet = 'doc'; render(); break;
     case 'yes':
-      if (st.screen === 'check' && rv && rv.proposed) fly('right', () => decided('Saved. Thank you.', labRec('Accepted', 'ok', pile(rv.proposed.stream))));
-      else if (st.screen === 'pickups' && ap) decided('Booked. Thank you.', pickRec('Booked', 'book'));
+      if (st.screen === 'check' && rv && rv.proposed) fly('right', () => decided('Saved. Thank you.', labRec('Accepted', 'ok', pile(rv.proposed.stream), { decision: 'approve', tags: rv.proposed })));
+      else if (st.screen === 'pickups' && ap) decided('Booked. Thank you.', pickRec('Booked', 'book', undefined, { decision: 'allow' }));
       break;
     case 'no': fly('left', () => { st.exit = null; st.sheet = 'rev-options'; render(); }); break;
     case 'rev-fix': case 'rev-who': case 'rev-options': case 'app-who': case 'app-options': case 'app-date': st.sheet = a; render(); break;
-    case 'rev-pile': decided('Saved as ' + arg.toLowerCase() + '.', labRec('Changed', 'book', arg)); break;
-    case 'rev-remove': decided('Taken out of the batch.', labRec('Removed', 'no', 'Taken out of the batch')); break;
-    case 'app-deny': decided('Not booked. It can come back on the next run.', pickRec('Not booked', 'no')); break;
-    case 'app-resched': decided('Moved to ' + arg + '.', pickRec('Rescheduled', 'book', `${(PARTNERS[ap.input.partner_id] || {}).name || ''} · New date ${arg}`)); break;
+    case 'rev-pile': decided('Saved as ' + arg.toLowerCase() + '.', labRec('Changed', 'book', arg, { decision: 'edit', tags: { ...(rv.proposed || {}), stream: Object.keys(PILE).find((k) => PILE[k][0] === arg) } })); break;
+    case 'rev-remove': decided('Taken out of the batch.', labRec('Removed', 'no', 'Taken out of the batch', { decision: 'reject' })); break;
+    case 'app-deny': decided('Not booked. It can come back on the next run.', pickRec('Not booked', 'no', undefined, { decision: 'deny' })); break;
+    case 'app-resched': decided('Moved to ' + fmt(arg) + '.', pickRec('Rescheduled', 'book', `${(PARTNERS[ap.input.partner_id] || {}).name || ''} · New date ${fmt(arg)}`, { decision: 'reschedule', deadline: arg })); break;
     case 'rev-send': case 'app-send': { const t = a === 'rev-send' ? rv : ap; st.sent[t.id] = arg; st.sheet = null;
       // The manager does not see his own outgoing message. A made-up reply (demo) arrives a few seconds later.
       const kind = a === 'rev-send' ? 'review' : 'approval', mid = 'reply-' + t.id + arg;
-      st.rt.push(setTimeout(() => { if (st.msgs.some((m) => m.id === mid)) return; st.msgs.unshift({ id: mid, type: 'reply', from: arg, ref: kind, items: kind === 'review' ? [t.item] : (t.input.items || []),
+      emit({ type: kind === 'review' ? 'review.send' : 'approval.send', [kind === 'review' ? 'review_id' : 'approval_id']: t.id, to: arg });
+      if (st.mode === 'demo') st.rt.push(setTimeout(() => { if (st.msgs.some((m) => m.id === mid)) return; st.msgs.unshift({ id: mid, type: 'reply', from: arg, ref: kind, items: kind === 'review' ? [t.item] : (t.input.items || []),
         summary: kind === 'review' ? 'I took another look at ' + t.item + '. The label is hard to read, so I am not sure the tags are right. Can you check it once more and decide? (Demo reply)' : 'I looked at this pickup. The recycler can come, but the date is tight. Please check it and decide. (Demo reply)',
         next: kind === 'review' ? 'Open it in Items to review and answer Yes, No or Change this.' : 'Open it in Pickups to review and choose Book pickup, Reschedule or Don’t book.' }); say('New message from ' + arg + '.'); render(); }, 6000));
       say('Sent to ' + arg + '.'); render(); break; }
@@ -502,6 +515,97 @@ function bindSwipe() {
     if (dx > 90) act('yes'); else if (dx < -90) act('no'); else { c.style.transition = 'transform .22s'; c.style.transform = ''; yes.style.opacity = no.style.opacity = 0; } dx = 0; };
   c.onpointercancel = () => { x0 = null; st.dragging = false; };
 }
-render();
-play();
+
+// ===== Agent bridge ============================================================================================
+// The screens above never read agent data directly. In demo mode they replay recorded sample data. In live mode they show
+// whatever an agent pushes in, and every decision the person makes is recorded as an output event. See docs/agent-bridge.md.
+const Q = new URLSearchParams(location.search);
+const CFG = { api: (Q.get('api') || '').replace(/\/$/, ''), adapter: Q.get('adapter') || 'events', poll: Number(Q.get('poll')) || 3000, embed: Q.get('embed') === '1', locked: Q.get('lock') === '1', origin: Q.get('origin') || '' };
+let OUT = []; try { OUT = JSON.parse(localStorage.getItem('tf.outputs') || '[]'); } catch (e) { OUT = []; }
+let EVN = 0, pollTimer = null, lastPull = '';
+const DEMO_P = JSON.stringify(PARTNERS), DEMO_PPL = [...PEOPLE], DEMO_ITEM = { ...ITEM };
+
+// Outputs: one event per person decision. Bodies match the Next app's API (reviews / approvals / alerts) so a backend can reuse them.
+function emit(ev) {
+  const e = { id: 'ev-' + Date.now().toString(36) + (++EVN), at: new Date().toISOString(), mode: st.mode, ...ev };
+  if (st.mode === 'live') { OUT.push(e); try { localStorage.setItem('tf.outputs', JSON.stringify(OUT.slice(-500))); } catch (x) {} deliver(e); }
+  try { window.dispatchEvent(new CustomEvent('tf:output', { detail: e })); } catch (x) {}
+  try { const tgt = window.parent !== window ? window.parent : window.opener; if (tgt && CFG.origin) tgt.postMessage({ type: 'tf:output', event: e }, CFG.origin); } catch (x) {}
+  return e;
+}
+function nextRequest(e) {
+  if (e.type === 'review.decision') return ['/api/reviews/' + e.review_id, e.decision === 'edit' ? { decision: 'edit', tags: e.tags } : { decision: e.decision }];
+  if (e.type === 'review.send') return ['/api/reviews/' + e.review_id, { decision: 'send', to: e.to }];
+  if (e.type === 'approval.decision') return ['/api/approvals/' + e.approval_id, e.decision === 'reschedule' ? { reschedule: { deadline: e.deadline } } : { allow: e.decision === 'allow' }];
+  if (e.type === 'approval.send') return ['/api/approvals/' + e.approval_id, { send: { to: e.to } }];
+  if (e.type === 'alert.read') return ['/api/alerts/read', { id: e.alert_id }];
+  return null;
+}
+function deliver(e) {
+  if (!CFG.api) return;
+  let url = CFG.api + '/events', body = e;
+  if (CFG.adapter === 'next') { const m = nextRequest(e); if (!m) return; url = CFG.api + m[0]; body = m[1]; }
+  fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    .then((r) => { if (!r.ok) throw new Error(r.status); }).catch(() => { st.conn = 'send failed, kept locally'; render(); });
+}
+function exportOutputs() {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(OUT, null, 2)], { type: 'application/json' }));
+  a.download = 'textile-flow-outputs.json'; document.body.appendChild(a); a.click(); a.remove();
+}
+
+// Inputs: push() upserts by id, so an agent can send the whole picture again or only what changed.
+function upsert(list, inc, key, fix) {
+  for (const raw of inc || []) { const x = fix ? fix(raw) : raw, i = list.findIndex((y) => key(y) === key(x));
+    if (i < 0) list.push(x);
+    else { const old = list[i]; if (old._t && Date.now() - old._t < 10000 && x.state === 'pending') continue; list[i] = { ...old, ...x }; } }
+}
+function push(inp) {
+  if (!inp) return; if (st.mode !== 'live') setMode('live');
+  const f = LIVE; if (inp.today) f.today = inp.today;
+  for (const o of inp.items || []) {
+    const row = [o.key || o.item_key, o.garment || o.garment_type || '', o.color || '', o.label || o.label_text || '', o.state || 'pending', o.stream || null, o.fibre || o.fibre_type || null, o.color_group || null, o.confidence == null ? null : o.confidence, o.condition || null, o.image || null];
+    const i = f.items.findIndex((r) => r[0] === row[0]); if (i < 0) f.items.push(row); else f.items[i] = row; ITEM[row[0]] = { garment: row[1], color: row[2] };
+  }
+  const pend = (x) => ({ state: 'pending', ...x });
+  upsert(f.reviews, inp.reviews, (x) => x.id, pend); upsert(f.approvals, inp.approvals, (x) => x.id, pend);
+  upsert(f.pickups, inp.pickups, (x) => x.id); upsert(f.alerts, inp.alerts, (x) => x.id);
+  for (const a of inp.alerts || []) if (a.read) st.seen[a.id] = 1;
+  if (inp.partners) Object.assign(PARTNERS, inp.partners);
+  if (inp.people) { PEOPLE.length = 0; PEOPLE.push(...inp.people); }
+  render();
+}
+// The existing Next app API (/api/state) mapped to the same input shape, so this UI can sit on the current backend.
+function fromNext(s) {
+  return { today: s.today, partners: Object.fromEntries((s.recyclers || []).map((r) => [r.id, { name: (r.name || '').replace(' (fictional)', ''), address: r.address }])), people: (s.people || []).map((p) => p.name),
+    items: (s.items || []).map((i) => ({ key: i.item_key, garment: i.garment_type, color: i.color, label: i.label_text, state: i.state, stream: i.stream, fibre: i.fibre_type, color_group: i.color_group, confidence: i.confidence, condition: i.condition })),
+    reviews: (s.reviews || []).map((r) => ({ id: r.review_id, item: r.item_key, label: r.label_text, proposed: r.proposed_tags, reason: r.reason, state: r.state })),
+    approvals: (s.approvals || []).map((a) => ({ id: a.approval_id, state: a.state, input: a.input })),
+    pickups: (s.pickups || []).map((p) => ({ id: p.booking_id, route: p.route, partner: p.partner_id, deadline: p.deadline, n: (p.items || []).length, items: p.items, lots: p.lots })),
+    alerts: (s.alerts || []).map((a) => ({ id: a.alert_id, type: a.type, summary: a.summary, items: a.items, deadline: a.deadline, next: a.next_step, ref: a.ref_kind, from: a.from_name, read: !!a.is_read })) };
+}
+async function pull() {
+  try { const r = await fetch(CFG.api + (CFG.adapter === 'next' ? '/api/state' : '/inputs'), { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
+    let j = await r.json(); if (CFG.adapter === 'next') j = fromNext(j); const key = JSON.stringify(j); st.conn = 'connected';
+    if (key !== lastPull) { lastPull = key; push(j); } else render();
+  } catch (e) { st.conn = 'offline'; render(); }
+}
+function startPoll() { clearInterval(pollTimer); pollTimer = null; if (st.mode === 'live' && CFG.api) { pull(); pollTimer = setInterval(pull, CFG.poll); } }
+
+function setMode(m) {
+  stopPlay(); st.rt.forEach(clearTimeout); st.rt = [];
+  Object.assign(st, { screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null, hist: [], hf: 'all', removed: {}, added: {}, reopen: null, edit: {}, fi: 0, mode: m, conn: '' });
+  Object.keys(PARTNERS).forEach((k) => delete PARTNERS[k]); PEOPLE.length = 0; Object.keys(ITEM).forEach((k) => delete ITEM[k]); lastPull = '';
+  if (m === 'live') Object.assign(LIVE, BLANK());
+  else { Object.assign(PARTNERS, JSON.parse(DEMO_P)); PEOPLE.push(...DEMO_PPL); Object.assign(ITEM, DEMO_ITEM); }
+  render(); if (m === 'demo') play(); startPoll();
+}
+window.TextileFlow = { version: 1, get mode() { return st.mode; }, clear: () => setMode('live'), demo: () => setMode('demo'), push,
+  connect(o) { Object.assign(CFG, o || {}); if (CFG.api) CFG.api = CFG.api.replace(/\/$/, ''); setMode('live'); },
+  on(fn) { window.addEventListener('tf:output', (e) => fn(e.detail)); }, get outputs() { return OUT.slice(); },
+  clearOutputs() { OUT = []; try { localStorage.removeItem('tf.outputs'); } catch (e) {} render(); }, exportOutputs };
+window.addEventListener('message', (e) => {
+  if (e.origin !== (CFG.origin || location.origin) || !e.data) return;
+  if (e.data.type === 'tf:input') push(e.data.payload); else if (e.data.type === 'tf:clear') setMode('live'); else if (e.data.type === 'tf:demo') setMode('demo');
+});
+if (Q.get('mode') === 'live') setMode('live'); else { render(); play(); }
 </script></body></html>
