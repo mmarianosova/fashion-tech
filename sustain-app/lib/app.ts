@@ -50,9 +50,20 @@ export async function startRun(kind: 'intake' | 'disposition', opts: { batchId?:
   await checkStart(a.zoo, env.floor);
   const threshold = opts.threshold ?? 0.8;
   const batchId = opts.batchId ?? 'SEED-1';
+  // Items from a pickup that was denied or rescheduled come back: clear their alert flag so they can be proposed again.
+  const overrides: Record<string, string> = {};
+  if (kind === 'disposition') {
+    const booked = new Set((await a.db.all('SELECT items FROM pickups')).flatMap((r: any) => p<string[]>(r.items) ?? []));
+    for (const r of await a.db.all("SELECT input,state,resched_to FROM approvals WHERE state IN ('denied','rescheduled') ORDER BY rowid")) {
+      for (const k of (p<any>(r.input)?.items ?? []).filter((k: string) => !booked.has(k))) {
+        await a.db.run("UPDATE inventory SET alert_status='none' WHERE item_key=?", [k]);
+        if (r.state === 'rescheduled') overrides[k] = r.resched_to; else delete overrides[k];
+      }
+    }
+  }
   const message = kind === 'intake'
     ? `Process batch ${batchId} with a confidence threshold of ${threshold}. Tag every item and hold anything you are not sure about. Finish with the summary.`
-    : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.`;
+    : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.${Object.keys(overrides).length ? ` A person moved some items to a later hand-over date: use these deadlines instead of today plus 7 days: ${Object.entries(overrides).map(([k, v]) => `${k}=${v}`).join(', ')}.` : ''}`;
   const agentId = kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
   const idem = `${kind}-${a.deps.newId('run')}`;
   const { sessionId } = env.mode === 'real'
@@ -66,7 +77,7 @@ export async function startRun(kind: 'intake' | 'disposition', opts: { batchId?:
     const d: Deps = { ...a.deps, zoo: wrapPace(a.zoo) };
     const run = kind === 'intake'
       ? simulateIntake(d, sessionId, batchId, { threshold, wait: pollWait() })
-      : simulateDisposition(d, sessionId, env.today, a.mcp, { wait: pollWait() });
+      : simulateDisposition(d, sessionId, env.today, a.mcp, { wait: pollWait(), overrides });
     run.catch(async (e) => { await a.db.run('UPDATE runs SET finished_at=?,status=? WHERE session_id=?', [a.deps.now(), `error: ${e.message}`, sessionId]); });
   }
   return { sessionId };

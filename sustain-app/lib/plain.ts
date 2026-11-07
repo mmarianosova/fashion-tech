@@ -21,3 +21,7 @@ export function fixTags(base: any, stream: string) {
   return { stream, fibre_type: !b.fibre_type || b.fibre_type === 'unknown' ? 'blend' : b.fibre_type, color_group: b.color_group ?? 'mixed',
     condition: stream === 'trash' ? 'unusable' : b.condition === 'unusable' ? 'damaged' : b.condition ?? 'damaged' };
 }
+
+// Reschedule choices: the current hand-over date plus 3, 7 or 14 days (YYYY-MM-DD in, YYYY-MM-DD out).
+export const addDays = (d: string, n: number) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
+export const RESCHEDULE_DAYS = [3, 7, 14];

@@ -87,6 +87,8 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offse
 .choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .choices button{min-height:76px;font-size:1.1rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.1}
 .choices svg{width:28px;height:28px}
+.choices.three{grid-template-columns:1fr 1fr 1fr;gap:8px}.choices.three button{min-height:84px;font-size:.88rem;padding:10px 4px}.choices.three svg{width:26px;height:26px}
+.btn-alt{background:#fff;color:var(--blue);border-color:#b7cff3}
 .btn-no{background:#fff;color:var(--red);border-color:#f0b9be}
 .btn-yes{background:var(--green-bg);color:#fff}
 .hint{text-align:center;color:var(--mute);font-size:.85rem;margin-top:12px}
@@ -171,6 +173,7 @@ const I = { back: S('<path d="m15 5-7 7 7 7"/>'), check: S('<path d="m5 12.5 4.5
   bell: S('<path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2 2 0 0 0 4 0"/>'),
   wrench: S('<path d="M14.5 6.5a4 4 0 0 0 4.9 4.9L21 13l-8 8-3-3 8-8-1.5-1.5ZM5 15l-2 2 4 4 2-2"/>'),
   person: S('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-4 3.5-6 7-6s6.2 2 7 6"/>'),
+  calendar: S('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>'),
   trash: S('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'), flag: S('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'),
   question: S('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>') };
 const PILE = { shred: ['Shred pile', 'mostly natural fibres, like cotton'], denim: ['Denim pile', 'jeans and denim'], mixed: ['Mixed pile', 'mixed or man-made fabric'], trash: ['Throw away', 'cannot be reused'] };
@@ -181,6 +184,7 @@ const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const fmt = (d) => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
 const plural = (n, a, b) => `${n} ${n === 1 ? a : (b || a + 's')}`;
 const pile = (s) => (PILE[s] ? PILE[s][0] : 'Not sure');
+const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const short = (it = []) => (it.length > 6 ? it.slice(0, 6).join(', ') + ' and ' + (it.length - 6) + ' more' : it.join(', '));
 
 const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null };
@@ -264,7 +268,7 @@ function pickups() {
   if (!t) return topbar('Approve pickups') + `<main class="page"><div class="count">${plural(booked.length, 'pickup')} booked</div>${booked.map((p) => `<div class="note"><div class="note-ico n-ok">${I.truck}</div><div><h4>${ROUTE[p.route] || p.route}</h4><p>${esc((PARTNERS[p.partner] || {}).name)}</p><p class="nx">Hand over by ${fmt(p.deadline)} · ${plural(p.n, 'item')}</p><button class="alt" style="margin-top:8px;min-height:44px;padding:8px 16px" data-act="doc" data-arg="${esc(p.id)}">Open pickup request</button></div></div>`).join('')}</main>`;
   return topbar('Approve pickups') + `<main class="page"><div class="count">${plural(q.length, 'pickup')} left</div><div class="deck" style="height:400px">
     ${n ? `<div class="sc next gate">${approvalFace(n)}</div>` : ''}<div class="sc gate top-card" id="card" style="${st.exit ? `transform:translateX(${st.exit === 'right' ? 560 : -560}px) rotate(${st.exit === 'right' ? 20 : -20}deg);transition:transform .22s` : ''}">
-    <span class="stamp yes">YES</span><span class="stamp no">NOT YET</span>${approvalFace(t)}</div></div>${choices('Not yet', 'Yes, book it')}<p class="hint">Swipe right to book, left for other choices.</p></main>`;
+    <span class="stamp yes">YES</span><span class="stamp no">NOT YET</span>${approvalFace(t)}</div></div><div class="choices three"><button class="btn-no" data-act="app-deny">${I.x}Do not book</button><button class="btn-alt" data-act="app-date">${I.calendar}Reschedule</button><button class="btn-yes" data-act="yes">${I.check}Yes, book it</button></div><p class="hint">“Do not book” is not final: the items come back on the next run. Swipe right to book, left for more choices.</p></main>`;
 }
 function messages() {
   const list = alerts(), un = unread();
@@ -278,7 +282,8 @@ function sheets() {
   if (st.sheet === 'rev-options' && rv) return sheet('What should we do with it?', rv.item + ': choose a way forward.', opt(I.wrench, 'Change it', 'Pick the right pile', 'rev-fix') + opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'rev-who', 'warn') + opt(I.trash, 'Take it out of this batch', 'The agent skips this item', 'rev-remove', 'bad'));
   if (st.sheet === 'rev-fix' && rv) return sheet('Which pile is it?', rv.item + ' — ' + (rv.label || 'no label text'), Object.entries(PILE).map(([k, v]) => opt(I.label, v[0], v[1], 'rev-pile', k === 'trash' ? 'bad' : '', v[0])).join(''), 'rev-options');
   if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the queue until they answer.', who('rev-send'), 'rev-options');
-  if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.x, 'Do not book it', 'The agent is told no and sends an alert', 'app-deny', 'bad'));
+  if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Do not book it', 'The agent is told no. The items come back on the next run.', 'app-deny', 'bad'));
+  if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The agent is told, and proposes it again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
   if (st.sheet === 'app-who' && ap) return sheet('Who should decide?', 'The booking stays in the queue until they answer.', who('app-send'), 'app-options');
   if (st.sheet === 'doc') { const p = F().pickups.find((x) => x.id === st.doc) || {}, pt = PARTNERS[p.partner] || {};
     return sheet('Pickup request', '', `<div class="reqdoc"><h4>Pickup request ${esc(p.id)}</h4><p><b>Collector:</b> ${esc(pt.name)}, ${esc(pt.address)}</p><p><b>Type:</b> ${ROUTE[p.route] || ''}</p><p><b>Hand over by:</b> ${fmt(p.deadline)}</p><p><b>Items (${p.n}):</b> ${esc((p.items || []).join(', '))}</p>${p.lots && Object.keys(p.lots).length ? `<p><b>Colour lots:</b> ${Object.entries(p.lots).map(([g, v]) => g + ' ' + v.length).join(', ')}</p>` : ''}</div>`); }
@@ -306,10 +311,11 @@ function act(a, arg) {
     case 'doc': st.doc = arg; st.sheet = 'doc'; render(); break;
     case 'yes': if (st.screen === 'check' && rv && rv.proposed) fly('right', () => decided('Saved. Thank you.')); else if (st.screen === 'pickups' && ap) fly('right', () => decided('Booked. Thank you.')); break;
     case 'no': fly('left', () => { st.exit = null; st.sheet = st.screen === 'check' ? 'rev-options' : 'app-options'; render(); }); break;
-    case 'rev-fix': case 'rev-who': case 'rev-options': case 'app-who': case 'app-options': st.sheet = a; render(); break;
+    case 'rev-fix': case 'rev-who': case 'rev-options': case 'app-who': case 'app-options': case 'app-date': st.sheet = a; render(); break;
     case 'rev-pile': decided('Saved as ' + arg.toLowerCase() + '.'); break;
     case 'rev-remove': decided('Taken out of the batch.'); break;
-    case 'app-deny': decided('Not booked.'); break;
+    case 'app-deny': decided('Not booked. It can come back on the next run.'); break;
+    case 'app-resched': decided('Moved to ' + arg + '.'); break;
     case 'rev-send': case 'app-send': { const t = a === 'rev-send' ? rv : ap; st.sent[t.id] = arg; st.sheet = null;
       st.msgs.unshift({ id: 'local-' + t.id + arg, type: 'question', summary: 'Sent to ' + arg + ': ' + (a === 'rev-send' ? t.item + ' needs a second look. ' + t.reason : 'a ' + (ROUTE[t.input.route] || '').toLowerCase() + ' pickup needs a second look.'),
         next: arg + ' to decide. It stays in ' + (a === 'rev-send' ? 'Check labels' : 'Approve pickups') + ' until someone answers.' });

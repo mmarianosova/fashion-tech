@@ -84,6 +84,8 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offse
 .choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .choices button{min-height:76px;font-size:1.1rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.1}
 .choices svg{width:28px;height:28px}
+.choices.three{grid-template-columns:1fr 1fr 1fr;gap:8px}.choices.three button{min-height:84px;font-size:.88rem;padding:10px 4px}.choices.three svg{width:26px;height:26px}
+.btn-alt{background:#fff;color:var(--blue);border-color:#b7cff3}
 .btn-no{background:#fff;color:var(--red);border-color:#f0b9be}
 .btn-yes{background:var(--green-bg);color:#fff}
 .hint{text-align:center;color:var(--mute);font-size:.85rem;margin-top:12px}

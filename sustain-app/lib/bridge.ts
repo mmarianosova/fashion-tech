@@ -134,3 +134,18 @@ export async function sendApprovalTo(d: Deps, approvalId: string, person: string
   await postMessage(d, input.items ?? [], `Sent to ${person}: a ${String(input.route ?? '').replace('_', ' ')} pickup needs a second look.${note ? ' ' + note : ''}`, `${person} to decide. The booking stays in Approve pickups until someone answers.`);
   return { already: false, state: 'pending', sent_to: person };
 }
+
+/** Move a proposed pickup to a later hand-over date. The agent is told no (so it is not left waiting), the app remembers the new date,
+ *  and the items are proposed again on the next Disposition run with that date. Not final: nothing is lost. */
+export async function rescheduleApproval(d: Deps, approvalId: string, deadline: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline ?? '')) throw new Error('deadline must be YYYY-MM-DD');
+  const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
+  if (!a) throw new Error('unknown approval');
+  if (a.state !== 'pending') return { already: true, state: a.state };
+  const input = p(a.input) ?? {};
+  if (input.deadline && deadline <= input.deadline) throw new Error('new date must be later than the current one');
+  await d.zoo.resolveApproval(approvalId, 'deny');
+  await d.db.run("UPDATE approvals SET state='rescheduled',resched_to=?,decided_at=? WHERE approval_id=?", [deadline, d.now(), approvalId]);
+  await postMessage(d, input.items ?? [], `Pickup moved to ${deadline}: the ${String(input.route ?? '').replace('_', ' ')} pickup will be proposed again on the next run.`, 'Nothing to do now. Run now proposes it again with the new date.');
+  return { already: false, state: 'rescheduled', resched_to: deadline };
+}
