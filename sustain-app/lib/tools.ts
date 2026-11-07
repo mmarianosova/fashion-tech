@@ -11,7 +11,7 @@ export type Ctx = { db: Db; now: () => string; callId: string; sessionId: string
 const STREAMS = ['mixed', 'shred', 'denim', 'trash'];
 const GROUPS = ['whites', 'darks', 'brights', 'mixed'];
 const CONDS = ['wearable', 'damaged', 'unusable'];
-const ALERTS = ['donate_recycle_due', 'review_waiting', 'dispute_deadline', 'delay_risk'];
+const ALERTS = ['donate_recycle_due', 'review_waiting', 'rescheduled', 'dispute_deadline', 'delay_risk'];
 
 export class ToolError extends Error {}
 const need = (c: unknown, msg: string) => { if (!c) throw new ToolError(msg); };
@@ -107,7 +107,10 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
     need(isCalendarDate(i?.today), 'today must be YYYY-MM-DD');
     const rows = await c.db.all(`SELECT i.* FROM inventory i
       LEFT JOIN runs r ON r.session_id=?
-      WHERE i.status <> 'material_tagged' AND (r.handoff_batch IS NULL OR EXISTS (
+      WHERE i.status <> 'material_tagged' AND NOT EXISTS (
+        SELECT 1 FROM approvals a, json_each(json_extract(COALESCE(a.approved_input,a.input),'$.items')) item
+        WHERE a.reoffered_from IS NOT NULL AND a.state IN ('pending','allowed') AND item.value=i.item_key
+      ) AND (r.handoff_batch IS NULL OR EXISTS (
         SELECT 1 FROM batch_items b WHERE b.batch_id=r.handoff_batch AND b.item_key=i.item_key AND b.state='tagged'
       )) ORDER BY i.item_key`, [c.sessionId]);
     return { today: i.today, items: rows.map((r) => ({
@@ -127,7 +130,7 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
       SELECT ?,?,?,?,?,?,?,?,?
       WHERE (SELECT COUNT(*) FROM inventory WHERE item_key IN (SELECT value FROM json_each(?))
         AND alert_status <> 'sent' AND NOT EXISTS (
-          SELECT 1 FROM alerts a, json_each(a.items) old WHERE a.type NOT IN ('question','reply') AND old.value=inventory.item_key
+          SELECT 1 FROM alerts a, json_each(a.items) old WHERE a.type NOT IN ('question','reply','rescheduled') AND old.value=inventory.item_key
             AND (? <> 'donate_recycle_due' OR a.type <> 'review_waiting')
         )) = ?
       AND (? <> 'donate_recycle_due' OR EXISTS (

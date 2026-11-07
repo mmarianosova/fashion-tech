@@ -21,19 +21,21 @@ export function textileInputs(s: Awaited<ReturnType<typeof snapshot>>) {
       id: r.review_id, item: r.item_key, label: r.label_text, proposed: r.proposed_tags,
       reason: r.reason, state: r.state,
     })),
-    approvals: s.approvals.map((a) => ({ id: a.approval_id, state: a.state, input: a.input, resched_to: a.resched_to,
+    approvals: s.approvals.map((a) => ({ id: a.approval_id, state: a.state, input: a.input, reoffered_from: a.reoffered_from,
+      resched_to: s.approvals.find((next) => next.reoffered_from === a.approval_id)?.input?.deadline ?? a.resched_to,
       addable_items: s.pickupCandidates.filter((i) => keys.has(i.key) && i.route === a.input?.route && !assigned.has(i.key)).map((i) => i.key),
     })),
     pickups: s.pickups.map((p) => ({ id: p.booking_id, route: p.route, partner: p.partner_id,
       deadline: p.deadline, n: p.items?.length ?? 0, items: p.items, lots: p.lots })),
     alerts: s.alerts.map((a) => {
-      const moved = a.type === 'review_waiting' && / pickup rescheduled to \d{4}-\d{2}-\d{2}$/.test(a.summary)
+      const moved = ['review_waiting', 'rescheduled'].includes(a.type) && / pickup rescheduled to \d{4}-\d{2}-\d{2}$/.test(a.summary)
         ? s.approvals.find((p) => p.state === 'rescheduled' && p.resched_to && sameItems(p.input?.items, a.items))
         : undefined;
+      const corrected = moved && (s.approvals.find((next) => next.reoffered_from === moved.approval_id)?.input?.deadline ?? moved.resched_to);
       return { id: a.alert_id, type: a.type, items: a.items, ref: a.ref_kind, from: a.from_name, read: !!a.is_read,
-        summary: moved ? a.summary.replace(/\d{4}-\d{2}-\d{2}$/, moved.resched_to) : a.summary,
-        deadline: moved?.resched_to ?? a.deadline,
-        next: moved ? `Moved to ${moved.resched_to}. It will be proposed again on the next run.` : a.next_step };
+        summary: corrected ? a.summary.replace(/\d{4}-\d{2}-\d{2}$/, corrected) : a.summary,
+        deadline: corrected ?? a.deadline,
+        next: corrected ? `Current handover date: ${corrected}.` : a.next_step };
     }),
     partners: Object.fromEntries(s.recyclers.map((r) => [r.id, { name: r.name, address: r.address }])),
     people: s.people.map((person) => person.name),
@@ -80,14 +82,14 @@ export async function handleTextileEvent(d: Deps, event: Record<string, unknown>
               Array.isArray(event.items_removed) && event.items_removed.length) {
             throw new Error('The final pickup list is required.');
           }
-          return resolveApproval(d, id, true);
+          return resolveApproval(d, id, true, undefined, mcp);
         }
         const [approval] = await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [id]);
         if (!approval || approval.tool !== 'book_pickup') throw new Error('Unknown pickup approval.');
         if (approval.state !== 'pending') return { already: true, state: approval.state };
         if (!mcp) throw new Error('Pickup validation is unavailable.');
         const edited = await preparePickupEdit(mcp, id, p(approval.input), event.items);
-        return resolveApproval(d, id, true, edited);
+        return resolveApproval(d, id, true, edited, mcp);
       }
       throw new Error('Unknown approval decision.');
     }

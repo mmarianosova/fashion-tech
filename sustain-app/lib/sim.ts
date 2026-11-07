@@ -72,8 +72,8 @@ export async function simulateDisposition(d: Deps, sid: string, today: string, m
         summary: `${items.length} ${pk.route.replace('_', ' ')} items ready for pickup, ${deadline}` });
     } else if (st === 'rescheduled') {
       const to = (await d.db.all('SELECT resched_to FROM approvals WHERE approval_id=?', [approval_id]))[0].resched_to;
-      await call(d, sid, 'send_alert', { type: 'review_waiting', items: pk.items, location: pk.locations.join(', '),
-        next_step: `Moved to ${to}. It will be proposed again on the next run.`, summary: `${pk.route.replace('_', ' ')} pickup rescheduled to ${to}` });
+      await call(d, sid, 'send_alert', { type: 'rescheduled', items: pk.items, location: pk.locations.join(', '), deadline: to,
+        next_step: `Moved to ${to}. Open History to change the date.`, summary: `${pk.route.replace('_', ' ')} pickup rescheduled to ${to}` });
     } else {
       await call(d, sid, 'send_alert', { type: 'review_waiting', items: pk.items, location: pk.locations.join(', '),
         next_step: booking ? 'Review the booking error before trying again.' : 'Not booked. These items will be proposed again on the next run.',

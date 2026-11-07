@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS disposition_handoffs (batch_id TEXT PRIMARY KEY, inta
 `;
 
 // Columns added after the first release: older databases get them via ALTER TABLE.
-const ADDED: [string, string, string][] = [['pickups', 'session_id', 'TEXT'], ['reviews', 'sent_to', 'TEXT'], ['reviews', 'sent_at', 'TEXT'], ['approvals', 'sent_to', 'TEXT'], ['approvals', 'resched_to', 'TEXT'], ['reviews', 'replied', 'INTEGER NOT NULL DEFAULT 0'], ['approvals', 'sent_at', 'TEXT'], ['approvals', 'replied', 'INTEGER NOT NULL DEFAULT 0'], ['alerts', 'ref_kind', 'TEXT'], ['alerts', 'from_name', 'TEXT'], ['runs', 'handoff_batch', 'TEXT'], ['approvals', 'approved_input', 'TEXT']];
+const ADDED: [string, string, string][] = [['pickups', 'session_id', 'TEXT'], ['reviews', 'sent_to', 'TEXT'], ['reviews', 'sent_at', 'TEXT'], ['approvals', 'sent_to', 'TEXT'], ['approvals', 'resched_to', 'TEXT'], ['reviews', 'replied', 'INTEGER NOT NULL DEFAULT 0'], ['approvals', 'sent_at', 'TEXT'], ['approvals', 'replied', 'INTEGER NOT NULL DEFAULT 0'], ['alerts', 'ref_kind', 'TEXT'], ['alerts', 'from_name', 'TEXT'], ['runs', 'handoff_batch', 'TEXT'], ['approvals', 'approved_input', 'TEXT'], ['approvals', 'reoffered_from', 'TEXT']];
 
 export async function migrate(db: Db) {
   await db.exec(SCHEMA);

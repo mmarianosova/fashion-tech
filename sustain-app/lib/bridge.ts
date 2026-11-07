@@ -1,3 +1,4 @@
+import { callTool, type McpDeps } from './mcp.ts';
 // Event bridge: turns ZooWork events into app actions. Used by the webhook route, the poller, and the simulator.
 // Event shape below is NORMALISED by normalizeEvent(); VERIFY field names against real events at the smoke test.
 import { isCalendarDate } from './rules.ts';
@@ -110,8 +111,9 @@ function notifyPickupApproval(d: Deps, a: { approval_id: string; session_id: str
   return d.zoo.resolveApproval(a.approval_id, decision, a.session_id);
 }
 
-async function resolvePickupApproval(d: Deps, a: any, allow: boolean, editedInput?: unknown) {
+async function resolvePickupApproval(d: Deps, a: any, allow: boolean, editedInput?: unknown, mcp?: McpDeps) {
   const approvalId = a.approval_id;
+  if (a.reoffered_from && allow && !mcp) throw new Error('Pickup booking is unavailable.');
   const now = d.now();
   const state = allow ? 'allowed' : 'denied';
   // Persist the human decision before ZooWork resumes and can call MCP.
@@ -129,19 +131,33 @@ async function resolvePickupApproval(d: Deps, a: any, allow: boolean, editedInpu
     if (current.state === 'pending') throw new Error('An added item is already assigned to another pickup.');
     return { already: true, state: current.state };
   }
+  let booking;
   try {
-    await notifyPickupApproval(d, a, allow ? 'allow-once' : 'deny');
+    if (!a.reoffered_from) await notifyPickupApproval(d, a, allow ? 'allow-once' : 'deny');
+    else if (allow && mcp) {
+      booking = await callTool(mcp, 'book_pickup', p(a.input));
+      if (booking.isError) throw new Error('Could not book this pickup: ' + booking.data.error);
+    }
   } catch (e) {
     await d.db.run("UPDATE approvals SET state='pending',decided_at=NULL,approved_input=NULL WHERE approval_id=? AND decided_at=?", [approvalId, now]);
     throw e;
   }
+  if (booking && mcp) {
+    const { items, deadline, partner_id } = booking.data;
+    const partner = mcp.recyclers.find((r) => r.id === partner_id)!;
+    await tools.send_alert({ ...d, sessionId: a.session_id, callId: approvalId }, {
+      type: 'donate_recycle_due', items, deadline, recycler_address: partner.address,
+      next_step: `Hand over to ${partner.name} at ${partner.address} by ${deadline}`,
+      summary: `${items.length} items ready for pickup, ${deadline}`,
+    });
+  }
   return { already: false, state };
 }
 
-export async function resolveApproval(d: Deps, approvalId: string, allow: boolean, editedInput?: unknown) {
+export async function resolveApproval(d: Deps, approvalId: string, allow: boolean, editedInput?: unknown, mcp?: McpDeps) {
   const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
   if (!a) throw new Error('unknown approval');
-  if (a.tool === 'book_pickup') return resolvePickupApproval(d, a, allow, editedInput);
+  if (a.tool === 'book_pickup') return resolvePickupApproval(d, a, allow, editedInput, mcp);
   if (a.state !== 'pending') return { already: true, state: a.state };
   await d.zoo.resolveApproval(approvalId, allow ? 'allow-once' : 'deny', a.session_id);
   await d.db.run('UPDATE approvals SET state=?,decided_at=? WHERE approval_id=?', [allow ? 'allowed' : 'denied', d.now(), approvalId]);
@@ -210,10 +226,17 @@ export async function rescheduleApproval(d: Deps, approvalId: string, deadline: 
   const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
   if (!a) throw new Error('unknown approval');
   if (a.state === 'rescheduled') {
-    if (a.resched_to === deadline) return { already: true, state: a.state, resched_to: deadline };
+    const nextId = 'reoffer:' + approvalId;
+    const [next] = await d.db.all('SELECT input FROM approvals WHERE approval_id=?', [nextId]);
+    if (next) {
+      if (p(next.input)?.deadline === deadline) return { already: true, state: a.state, resched_to: deadline };
+      throw new Error('This pickup is back in Pickups. Open the latest proposal.');
+    }
     if (previous !== a.resched_to) throw new Error('The pickup date changed. Reopen it from History.');
-    const [changed] = await d.db.all(`UPDATE approvals SET resched_to=? WHERE approval_id=?
-      AND state='rescheduled' AND resched_to=? AND NOT EXISTS (
+    if (deadline === previous) return { already: true, state: a.state, resched_to: deadline };
+    const [changed] = await d.db.all(`INSERT OR IGNORE INTO approvals (approval_id,session_id,tool,input,created_at,reoffered_from)
+      SELECT ?,session_id,tool,json_set(input,'$.deadline',?),?,approval_id FROM approvals
+      WHERE approval_id=? AND state='rescheduled' AND resched_to=? AND NOT EXISTS (
         SELECT 1 FROM pickups b, json_each(b.items) item
         WHERE item.value IN (SELECT value FROM json_each(json_extract(approvals.input,'$.items')))
       ) AND NOT EXISTS (
@@ -221,9 +244,13 @@ export async function rescheduleApproval(d: Deps, approvalId: string, deadline: 
         WHERE newer.rowid>approvals.rowid AND item.value IN (
           SELECT value FROM json_each(json_extract(approvals.input,'$.items'))
         )
-      ) RETURNING resched_to`, [deadline, approvalId, previous]);
-    if (!changed) throw new Error('This pickup has changed. Open the latest proposal.');
-    return { already: false, state: a.state, resched_to: changed.resched_to };
+      ) RETURNING input`, [nextId, deadline, d.now(), approvalId, previous]);
+    if (!changed) {
+      const [retry] = await d.db.all('SELECT input FROM approvals WHERE approval_id=?', [nextId]);
+      if (p(retry?.input)?.deadline === deadline) return { already: true, state: a.state, resched_to: deadline };
+      throw new Error('This pickup has changed. Open the latest proposal.');
+    }
+    return { already: false, state: a.state, resched_to: deadline };
   }
   if (a.state !== 'pending' || previous !== undefined) throw new Error('This pickup is no longer available to reschedule.');
   if (p(a.input)?.deadline === deadline) throw new Error('Choose a different handover date.');
@@ -235,7 +262,7 @@ export async function rescheduleApproval(d: Deps, approvalId: string, deadline: 
     return { already: true, state: current.state };
   }
   try {
-    await notifyPickupApproval(d, a, 'deny');
+    if (!a.reoffered_from) await notifyPickupApproval(d, a, 'deny');
   } catch (e) {
     await d.db.run("UPDATE approvals SET state='pending',resched_to=NULL,decided_at=NULL WHERE approval_id=? AND decided_at=?", [approvalId, now]);
     throw e;
