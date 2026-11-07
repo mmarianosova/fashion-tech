@@ -18,6 +18,17 @@ npm run preview                   # regenerate preview/index.html (standalone re
 3. `fake` mode needs a long-lived server (it runs the scripted agent in the background), so use it locally, not on Vercel.
 4. Public MCP URL for the Disposition Agent: `https://<your-app>.vercel.app/mcp` (POST JSON-RPC, never redirects; check with `curl -i`).
 
+## Textile drop-off directory
+Run `python3 scripts/import-dropoffs.py /path/to/tri_state_textile_dropoff_sites.csv` from the app folder. The local data is ignored by Git. Open the directory from Approve pickups. It lists drop-off conditions for a person to review. The MCP partner list and automated bookings use a separate dataset.
+
+## Disposition-only demo
+
+1. From the app folder, run `node scripts/prepare-disposition-demo.ts` to create a fresh local database. The script refuses to overwrite an existing file. It seeds seven fictional items and leaves Intake empty.
+2. Set `DATABASE_URL=file:local.db.disposition-demo` and `DEMO_TODAY=2026-11-07`. For a live run, set `ZOO_MODE=real`, `ZOOWORK_API_KEY`, and `DISPOSITION_AGENT_ID`. Start the test agent with the current Disposition persona and a reachable public HTTPS MCP endpoint. Keep its schedule off.
+3. Run the app on loopback. Expose only `POST /mcp` to ZooWork. Set `ENABLE_ZOOWORK_ARTIFACT_DOWNLOAD=1` on the loopback app to enable **Download ZooWork request**.
+4. Choose **Run now**. Expect one donation proposal, one denim recycling proposal, and one mixed-fibre group below the partner minimum. Approve the two proposals in **Approve pickups**. Expect two booked pickups and three entries in **Messages**.
+5. Open each **Pickup request**, then use **Download ZooWork request** once the agent has published its file. Run again on the same database and verify the counts stay at two bookings and three alerts. Stop the agent and close the temporary MCP endpoint after the demo.
+
 ## What is tested (all offline, `npm test`)
 Rules match the Python reference on all 32 seed items and the full disposition plan; Intake run with holds (agent call stays unresolved until a person decides); Disposition run with approvals, denial, repeat run (no duplicate alerts); double-alert guard; redelivered events and failed resolves (tool never runs twice); MCP protocol and minimums; cost guard; webhook signature; server orchestration (`startRun`, `snapshot`).
 

@@ -64,7 +64,7 @@ export async function realZoo(apiKey: string | undefined, baseUrl: string | unde
         if (call?.phase === 'requested') return { ...envelope, call_id: call.callId, name: call.name, input: call.input };
         if (event.eventType === 'agent.approval' && event.payload.phase === 'requested') {
           return { ...envelope, type: 'approval.requested', approval_id: event.payload.approvalId,
-            tool: event.payload.toolName, input: event.payload.input };
+            tool: event.payload.toolName, input: event.payload.arguments ?? event.payload.input };
         }
         return { ...envelope, status: event.payload.status };
       });

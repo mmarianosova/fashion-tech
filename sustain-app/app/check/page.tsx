@@ -113,7 +113,7 @@ export default function Check() {
     {step === 'options' && top && (
       <Sheet title="What should we do with it?" sub={`${top.item_key}: choose a way forward.`} onClose={() => setStep(null)}>
         <Opt icon={Ico.person} tone="warn" title="Send to someone" help="They decide. It stays here until someone answers." onClick={() => setStep('who')} />
-        <Opt icon={Ico.trash} tone="bad" title="Take it out of this batch" help="The agent skips this item" onClick={() => send(top, { decision: 'reject' }, 'Taken out of the batch.')} />
+        <Opt icon={Ico.trash} tone="bad" title="Delete from pile" help="The agent skips this item" onClick={() => send(top, { decision: 'reject' }, 'Deleted from the pile.')} />
       </Sheet>)}
     {step === 'fix' && top?.materialOnly && (
       <Sheet title="Record the material" sub={top.item_key} onClose={() => setStep(null)}>

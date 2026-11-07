@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { libsqlDb, type Db } from './db.ts';
 import { seed, loadRecyclers, loadPeople } from './seed.ts';
 import { FakeZoo, checkStart, realZoo, type ZooClient } from './zoo.ts';
-import { handleEvent, resolveApproval, type Deps } from './bridge.ts';
+import { handleEvent, resolveApproval, deliverDemoReplies, type Deps } from './bridge.ts';
 import { simulateDisposition, simulateIntake } from './sim.ts';
 import type { McpDeps } from './mcp.ts';
 import { plan } from './rules.ts';
@@ -17,6 +17,8 @@ export const env = {
   today: process.env.DEMO_TODAY ?? '2026-11-07',
   floor: Number(process.env.BALANCE_FLOOR_USD ?? 20),
   runLimit: Number(process.env.RUN_COST_LIMIT_USD ?? 3),
+  // Demo only: how long after "Send to someone" a made-up reply arrives. Off (-1) when talking to the real ZooWork unless DEMO_REPLY_MS is set.
+  replyMs: Number(process.env.DEMO_REPLY_MS ?? (process.env.ZOO_MODE === 'real' ? -1 : 6000)),
 };
 
 const zooAgentId = (kind: string) => kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
@@ -45,7 +47,7 @@ async function init(): Promise<App> {
   const indexKey = process.env.BRAVE_SEARCH_API_KEY;
   const lookupProduct = process.env.INTAKE_WEB_LOOKUP === '1'
     ? createProductLookup(manufacturerSearch, undefined, indexKey ? braveSearchIndex(indexKey) : undefined) : undefined;
-  return { db, zoo, deps: { db, zoo, now, newId, lookupProduct, materialOnly: true }, mcp: { db, recyclers, now, newId } };
+  return { db, zoo, deps: { db, zoo, now, newId, lookupProduct, materialOnly: true }, mcp: { db, recyclers, now, newId, today: env.today } };
 }
 
 // In fake mode the "person" decisions come from the UI; the simulator polls the DB until they arrive.
@@ -62,14 +64,29 @@ export async function startRun(kind: 'intake' | 'disposition', opts: { batchId?:
   await checkStart(a.zoo, env.floor);
   const threshold = opts.threshold ?? 0.8;
   const batchId = opts.batchId ?? 'SEED-1';
+  // Items from a pickup that was denied or rescheduled come back: clear their alert flag so they can be proposed again.
+  const overrides: Record<string, string> = {};
+  if (kind === 'disposition') {
+    const booked = new Set((await a.db.all('SELECT items FROM pickups')).flatMap((r: any) => p<string[]>(r.items) ?? []));
+    for (const r of await a.db.all("SELECT input,state,resched_to FROM approvals WHERE state IN ('denied','rescheduled') ORDER BY rowid")) {
+      for (const k of (p<any>(r.input)?.items ?? []).filter((k: string) => !booked.has(k))) {
+        await a.db.run("UPDATE inventory SET alert_status='none' WHERE item_key=?", [k]);
+        if (r.state === 'rescheduled') overrides[k] = r.resched_to; else delete overrides[k];
+      }
+    }
+  }
   const message = kind === 'intake'
     ? `Process batch ${batchId} with a confidence threshold of ${threshold}. Use each item’s assessment from get_batch. Hold needs_review items and anything below the threshold. Finish with the summary.`
     : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.`;
   const agentId = zooAgentId(kind);
   const idem = `${kind}-${a.deps.newId('run')}`;
+  const dateOverrides = Object.entries(overrides).map(([key, date]) => `${key}=${date}`);
+  const sessionMessage = dateOverrides.length
+    ? `${message} A person moved some items to a later hand-over date: use these deadlines instead of today plus 7 days: ${dateOverrides.join(', ')}.`
+    : message;
   const { sessionId } = env.mode === 'real'
-    ? await a.zoo.createSession(agentId!, message, idem)
-    : await a.zoo.createSession('fake', message, idem);
+    ? await a.zoo.createSession(agentId!, sessionMessage, idem)
+    : await a.zoo.createSession('fake', sessionMessage, idem);
   await a.db.run('INSERT INTO runs (session_id,agent,ref,started_at) VALUES (?,?,?,?)', [sessionId, kind, batchId, a.deps.now()]);
   if (kind === 'intake') {
     await a.db.run("UPDATE batch_items SET state='pending' WHERE batch_id=? AND state<>'tagged'", [batchId]);
@@ -78,7 +95,7 @@ export async function startRun(kind: 'intake' | 'disposition', opts: { batchId?:
     const d: Deps = { ...a.deps, zoo: wrapPace(a.zoo) };
     const run = kind === 'intake'
       ? simulateIntake(d, sessionId, batchId, { threshold, wait: pollWait() })
-      : simulateDisposition(d, sessionId, env.today, a.mcp, { wait: pollWait() });
+      : simulateDisposition(d, sessionId, env.today, a.mcp, { wait: pollWait(), overrides });
     run.catch(async (e) => { await a.db.run('UPDATE runs SET finished_at=?,status=? WHERE session_id=?', [a.deps.now(), `error: ${e.message}`, sessionId]); });
   }
   return { sessionId };
@@ -99,6 +116,7 @@ export async function pumpSession(sessionId: string) {
 
 export async function snapshot() {
   const a = await getApp();
+  if (env.replyMs >= 0) await deliverDemoReplies(a.deps, env.replyMs);
   const q = (s: string, args: any[] = []) => a.db.all(s, args);
   const inventory = (await q('SELECT * FROM inventory ORDER BY item_key')).map((r) => ({
     item_key: r.item_key, category: r.category, tags: { stream: r.stream, fibre_type: r.fibre_type, color_group: r.color_group, condition: r.condition },
@@ -108,6 +126,7 @@ export async function snapshot() {
   const pl = plan(inventory as any, a.mcp.recyclers, env.today);
   return {
     mode: env.mode, today: env.today, balance: await a.zoo.getBalance().catch(() => null),
+    pickupDownloads: env.mode === 'real' && process.env.ENABLE_ZOOWORK_ARTIFACT_DOWNLOAD === '1',
     batch, items: await q('SELECT * FROM batch_items WHERE batch_id=? ORDER BY item_key', [batch?.batch_id]),
     reviews: (await q(`SELECT r.*,a.result AS assessment FROM reviews r LEFT JOIN intake_assessments a
       ON r.session_id=a.session_id AND r.batch_id=a.batch_id AND r.item_key=a.item_key ORDER BY r.rowid DESC`))

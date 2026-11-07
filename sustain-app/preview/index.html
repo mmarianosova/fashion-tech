@@ -87,6 +87,8 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offse
 .choices{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .choices button{min-height:76px;font-size:1.1rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.1}
 .choices svg{width:28px;height:28px}
+.choices.three{grid-template-columns:1fr 1fr 1fr;gap:8px}.choices.three button{min-height:84px;font-size:.88rem;padding:10px 4px}.choices.three svg{width:26px;height:26px}
+.btn-alt{background:#fff;color:var(--blue);border-color:#b7cff3}
 .btn-no{background:#fff;color:var(--red);border-color:#f0b9be}
 .btn-yes{background:var(--green-bg);color:#fff}
 .hint{text-align:center;color:var(--mute);font-size:.85rem;margin-top:12px}
@@ -158,6 +160,10 @@ body.demo .scroll{flex:1;overflow-y:auto}
 
 .reqdoc{border:2px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;background:#fbfcfe}.reqdoc h4{margin:0 0 6px;font-size:1.1rem}.reqdoc p{margin:4px 0;font-size:.9rem}
 @media print{.top,.hello,.foot,.choices,.sheet button.cancel,.sheet button.big,.toast{display:none!important}}
+button.note.tap{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;min-height:0}
+.note .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.msg-body{font-size:1.05rem;line-height:1.45;margin:8px 0;color:var(--ink)}.msg-body.nx{font-weight:700}
+.big-link{border:0;width:100%;cursor:pointer;font-family:inherit;display:block;text-align:center;margin-top:12px;font-weight:800;text-decoration:none;background:var(--blue);color:#fff;padding:18px;border-radius:16px;font-size:1.1rem}
 </style></head>
 <body class="demo"><div class="app" id="app"></div>
 <script>
@@ -171,19 +177,21 @@ const I = { back: S('<path d="m15 5-7 7 7 7"/>'), check: S('<path d="m5 12.5 4.5
   bell: S('<path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2 2 0 0 0 4 0"/>'),
   wrench: S('<path d="M14.5 6.5a4 4 0 0 0 4.9 4.9L21 13l-8 8-3-3 8-8-1.5-1.5ZM5 15l-2 2 4 4 2-2"/>'),
   person: S('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-4 3.5-6 7-6s6.2 2 7 6"/>'),
+  calendar: S('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>'),
   trash: S('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'), flag: S('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'),
   question: S('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>') };
 const PILE = { shred: ['Shred pile', 'mostly natural fibres, like cotton'], denim: ['Denim pile', 'jeans and denim'], mixed: ['Mixed pile', 'mixed or man-made fabric'], trash: ['Throw away', 'cannot be reused'] };
 const ROUTE = { donate: 'Donation', recycle_shred: 'Fabric shredding', recycle_denim: 'Denim recycling', recycle_mixed: 'Mixed fabric recycling', dispose: 'Disposal' };
-const TITLE = { donate_recycle_due: 'Pickup ready', review_waiting: 'Needs a decision', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
+const TITLE = { reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Needs a decision', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
 const ITEM = Object.fromEntries(FRAMES[0].items.map((i) => [i[0], { garment: i[1], color: i[2] }]));
 const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (d) => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
 const plural = (n, a, b) => `${n} ${n === 1 ? a : (b || a + 's')}`;
 const pile = (s) => (PILE[s] ? PILE[s][0] : 'Not sure');
+const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const short = (it = []) => (it.length > 6 ? it.slice(0, 6).join(', ') + ' and ' + (it.length - 6) + ' more' : it.join(', '));
 
-const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null };
+const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [] };
 const F = () => FRAMES[st.fi];
 const pendRev = () => F().reviews.filter((r) => r.state === 'pending');
 const pendApp = () => F().approvals.filter((a) => a.state === 'pending');
@@ -254,8 +262,8 @@ function check() {
   if (!t) return topbar('Check labels') + `<main class="page">${st.timer && F().phase === 'intake' ? done('<span class="spin" style="margin:0"></span>', 'Still reading labels', 'Your next card appears here as soon as the agent is unsure about one.') : done(I.check, 'Nothing to check', 'When the agent is unsure about a label, it shows up here.')}</main>`;
   return topbar('Check labels') + `<main class="page"><div class="count">${plural(q.length, 'card')} left</div><div class="deck">
     ${n ? `<div class="sc next gate">${reviewFace(n)}</div>` : ''}<div class="sc gate top-card" id="card" style="${st.exit ? `transform:translateX(${st.exit === 'right' ? 560 : -560}px) rotate(${st.exit === 'right' ? 20 : -20}deg);transition:transform .22s` : ''}">
-    <span class="stamp yes">YES</span><span class="stamp no">NOT RIGHT</span>${reviewFace(t)}</div></div>
-    ${choices('Not right', 'Yes, right')}<p class="hint">Swipe the card right for yes, left for not right.</p></main>`;
+    <span class="stamp yes">YES</span><span class="stamp no">NO</span>${reviewFace(t)}</div></div>
+    <div class="choices three"><button class="btn-no" data-act="no">${I.x}No</button><button class="btn-alt" data-act="rev-fix">${I.wrench}Change this</button><button class="btn-yes" data-act="yes">${I.check}Yes</button></div><p class="hint">Swipe right for yes, left for no.</p></main>`;
 }
 function pickups() {
   const q = queue(pendApp()), t = q[0], n = q[1], booked = F().pickups;
@@ -264,21 +272,25 @@ function pickups() {
   if (!t) return topbar('Approve pickups') + `<main class="page"><div class="count">${plural(booked.length, 'pickup')} booked</div>${booked.map((p) => `<div class="note"><div class="note-ico n-ok">${I.truck}</div><div><h4>${ROUTE[p.route] || p.route}</h4><p>${esc((PARTNERS[p.partner] || {}).name)}</p><p class="nx">Hand over by ${fmt(p.deadline)} · ${plural(p.n, 'item')}</p><button class="alt" style="margin-top:8px;min-height:44px;padding:8px 16px" data-act="doc" data-arg="${esc(p.id)}">Open pickup request</button></div></div>`).join('')}</main>`;
   return topbar('Approve pickups') + `<main class="page"><div class="count">${plural(q.length, 'pickup')} left</div><div class="deck" style="height:400px">
     ${n ? `<div class="sc next gate">${approvalFace(n)}</div>` : ''}<div class="sc gate top-card" id="card" style="${st.exit ? `transform:translateX(${st.exit === 'right' ? 560 : -560}px) rotate(${st.exit === 'right' ? 20 : -20}deg);transition:transform .22s` : ''}">
-    <span class="stamp yes">YES</span><span class="stamp no">NOT YET</span>${approvalFace(t)}</div></div>${choices('Not yet', 'Yes, book it')}<p class="hint">Swipe right to book, left for other choices.</p></main>`;
+    <span class="stamp yes">YES</span><span class="stamp no">NOT YET</span>${approvalFace(t)}</div></div><div class="choices three"><button class="btn-no" data-act="app-deny">${I.x}Do not book</button><button class="btn-alt" data-act="app-date">${I.calendar}Reschedule</button><button class="btn-yes" data-act="yes">${I.check}Yes, book it</button></div><p class="hint">“Do not book” is not final: the items come back on the next run. Swipe right to book, left for more choices.</p></main>`;
 }
 function messages() {
-  const list = alerts(), un = unread();
-  const ic = (t) => (t === 'question' ? [I.question, 'n-ask'] : t === 'donate_recycle_due' ? [I.truck, 'n-ok'] : [I.flag, 'n-warn']);
-  if (!list.length) return topbar('Messages') + `<main class="page">${done(I.bell, 'No messages', 'Messages from the agents and your team show up here.')}</main>`;
-  return topbar('Messages') + `<main class="page">${un ? `<button class="big" style="margin-bottom:12px" data-act="markread">Mark ${un} as read</button>` : ''}${list.map((a) => { const [i, tone] = ic(a.type);
-    return `<div class="note ${st.seen[a.id] ? '' : 'unread'}"><div class="note-ico ${tone}">${i}</div><div><h4>${TITLE[a.type] || 'Message'}</h4><p>${esc(a.summary)}</p>${a.deadline ? `<p class="nx">By ${fmt(a.deadline)}</p>` : ''}<p class="nx">${esc(a.next)}</p></div></div>`; }).join('')}</main>`;
+  const list = alerts();
+  const ic = (t) => (t === 'reply' ? [I.person, 'n-ask'] : t === 'donate_recycle_due' ? [I.truck, 'n-ok'] : [I.flag, 'n-warn']);
+  if (!list.length) return topbar('Messages') + `<main class="page">${done(I.bell, 'No messages', 'Updates and replies show up here.')}</main>`;
+  return topbar('Messages') + `<main class="page">${list.map((a) => { const [i, tone] = ic(a.type);
+    return `<button class="note tap ${st.seen[a.id] ? '' : 'unread'}" data-act="msgopen" data-arg="${esc(a.id)}"><div class="note-ico ${tone}">${i}</div><div><h4>${esc(msgTitle(a))}</h4><p class="clamp">${esc(a.summary)}</p></div></button>`; }).join('')}</main>`;
 }
+const msgTitle = (a) => (a.type === 'reply' && a.from ? a.from + ' replied' : TITLE[a.type] || 'Message');
+const msgTarget = (a) => (a.ref === 'review' ? ['check', 'Go to Check labels'] : a.ref === 'approval' ? ['pickups', 'Go to Approve pickups'] : a.type === 'review_waiting' || a.type === 'donate_recycle_due' ? ['pickups', 'Go to Approve pickups'] : null);
 function sheets() {
   const rv = queue(pendRev())[0], ap = queue(pendApp())[0], who = (act) => PEOPLE.map((p) => opt(I.person, p, '', act, '', p)).join('');
-  if (st.sheet === 'rev-options' && rv) return sheet('What should we do with it?', rv.item + ': choose a way forward.', opt(I.wrench, 'Change it', 'Pick the right pile', 'rev-fix') + opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'rev-who', 'warn') + opt(I.trash, 'Take it out of this batch', 'The agent skips this item', 'rev-remove', 'bad'));
-  if (st.sheet === 'rev-fix' && rv) return sheet('Which pile is it?', rv.item + ' — ' + (rv.label || 'no label text'), Object.entries(PILE).map(([k, v]) => opt(I.label, v[0], v[1], 'rev-pile', k === 'trash' ? 'bad' : '', v[0])).join(''), 'rev-options');
+  if (st.sheet === 'msg' && st.open) { const m = alerts().find((x) => x.id === st.open), t = m && msgTarget(m); if (m) return sheet(msgTitle(m), (m.items || []).join(', '), `<p class="msg-body">${esc(m.summary)}</p>${m.deadline ? `<p class="msg-body nx">By ${fmt(m.deadline)}</p>` : ''}${m.next ? `<p class="msg-body nx">${esc(m.next)}</p>` : ''}${t ? `<button class="big-link" data-act="${t[0]}">${t[1]}</button>` : ''}`); }
+  if (st.sheet === 'rev-options' && rv) return sheet('Not right. What now?', rv.item + ': choose a way forward.', opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'rev-who', 'warn') + opt(I.trash, 'Delete from pile', 'The agent skips this item', 'rev-remove', 'bad'));
+  if (st.sheet === 'rev-fix' && rv) return sheet('Which pile is it?', rv.item + ' — ' + (rv.label || 'no label text'), Object.entries(PILE).map(([k, v]) => opt(I.label, v[0], v[1], 'rev-pile', k === 'trash' ? 'bad' : '', v[0])).join(''));
   if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the queue until they answer.', who('rev-send'), 'rev-options');
-  if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.x, 'Do not book it', 'The agent is told no and sends an alert', 'app-deny', 'bad'));
+  if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Do not book it', 'The agent is told no. The items come back on the next run.', 'app-deny', 'bad'));
+  if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The agent is told, and proposes it again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
   if (st.sheet === 'app-who' && ap) return sheet('Who should decide?', 'The booking stays in the queue until they answer.', who('app-send'), 'app-options');
   if (st.sheet === 'doc') { const p = F().pickups.find((x) => x.id === st.doc) || {}, pt = PARTNERS[p.partner] || {};
     return sheet('Pickup request', '', `<div class="reqdoc"><h4>Pickup request ${esc(p.id)}</h4><p><b>Collector:</b> ${esc(pt.name)}, ${esc(pt.address)}</p><p><b>Type:</b> ${ROUTE[p.route] || ''}</p><p><b>Hand over by:</b> ${fmt(p.deadline)}</p><p><b>Items (${p.n}):</b> ${esc((p.items || []).join(', '))}</p>${p.lots && Object.keys(p.lots).length ? `<p><b>Colour lots:</b> ${Object.entries(p.lots).map(([g, v]) => g + ' ' + v.length).join(', ')}</p>` : ''}</div>`); }
@@ -298,21 +310,25 @@ function act(a, arg) {
   const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages' };
   if (go[a]) { st.screen = go[a]; st.sheet = null; render(); return; }
   switch (a) {
-    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null }); render(); break;
+    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null }); st.rt.forEach(clearTimeout); st.rt = []; render(); break;
     case 'startintake': play(); render(); break;
     case 'startdisp': st.fi++; play(); render(); break; // step off the 'intake finished' frame, then the Disposition run plays
     case 'closesheet': st.sheet = null; render(); break;
-    case 'markread': alerts().forEach((x) => (st.seen[x.id] = 1)); render(); break;
+    case 'msgopen': st.seen[arg] = 1; st.open = arg; st.sheet = 'msg'; render(); break;
     case 'doc': st.doc = arg; st.sheet = 'doc'; render(); break;
     case 'yes': if (st.screen === 'check' && rv && rv.proposed) fly('right', () => decided('Saved. Thank you.')); else if (st.screen === 'pickups' && ap) fly('right', () => decided('Booked. Thank you.')); break;
     case 'no': fly('left', () => { st.exit = null; st.sheet = st.screen === 'check' ? 'rev-options' : 'app-options'; render(); }); break;
-    case 'rev-fix': case 'rev-who': case 'rev-options': case 'app-who': case 'app-options': st.sheet = a; render(); break;
+    case 'rev-fix': case 'rev-who': case 'rev-options': case 'app-who': case 'app-options': case 'app-date': st.sheet = a; render(); break;
     case 'rev-pile': decided('Saved as ' + arg.toLowerCase() + '.'); break;
     case 'rev-remove': decided('Taken out of the batch.'); break;
-    case 'app-deny': decided('Not booked.'); break;
+    case 'app-deny': decided('Not booked. It can come back on the next run.'); break;
+    case 'app-resched': decided('Moved to ' + arg + '.'); break;
     case 'rev-send': case 'app-send': { const t = a === 'rev-send' ? rv : ap; st.sent[t.id] = arg; st.sheet = null;
-      st.msgs.unshift({ id: 'local-' + t.id + arg, type: 'question', summary: 'Sent to ' + arg + ': ' + (a === 'rev-send' ? t.item + ' needs a second look. ' + t.reason : 'a ' + (ROUTE[t.input.route] || '').toLowerCase() + ' pickup needs a second look.'),
-        next: arg + ' to decide. It stays in ' + (a === 'rev-send' ? 'Check labels' : 'Approve pickups') + ' until someone answers.' });
+      // The manager does not see his own outgoing message. A made-up reply (demo) arrives a few seconds later.
+      const kind = a === 'rev-send' ? 'review' : 'approval', mid = 'reply-' + t.id + arg;
+      st.rt.push(setTimeout(() => { if (st.msgs.some((m) => m.id === mid)) return; st.msgs.unshift({ id: mid, type: 'reply', from: arg, ref: kind, items: kind === 'review' ? [t.item] : (t.input.items || []),
+        summary: kind === 'review' ? 'I took another look at ' + t.item + '. The label is hard to read, so I am not sure the tags are right. Can you check it once more and decide? (Demo reply)' : 'I looked at this pickup. The recycler can come, but the date is tight. Please check it and decide. (Demo reply)',
+        next: kind === 'review' ? 'Open it in Check labels and answer Yes, No or Change this.' : 'Open it in Approve pickups and choose Book it, Reschedule or Do not book.' }); say('New message from ' + arg + '.'); render(); }, 6000));
       say('Sent to ' + arg + '.'); render(); break; }
   }
 }

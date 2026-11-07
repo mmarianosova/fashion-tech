@@ -16,7 +16,7 @@
       "toolFilter": ["search_recyclers", "book_pickup"],
       "exposure": "direct",
       "permission": "always_allow",
-      "tools": {"book_pickup": {"permission": "always_ask"}}
+      "tools": {"book_pickup": {"permission": "always_ask", "requireConfirmation": true}}
     }
   ],
   "custom_tools": "see agents/custom_tools.json key 'disposition'",

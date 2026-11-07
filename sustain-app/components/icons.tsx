@@ -12,5 +12,6 @@ export const Ico = {
   trash: S(<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />),
   clock: S(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
   flag: S(<path d="M5 21V4M5 4h11l-2 4 2 4H5" />),
+  calendar: S(<><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M8 3v4M16 3v4" /></>),
   question: S(<><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01" /></>),
 };

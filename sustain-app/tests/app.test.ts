@@ -59,3 +59,29 @@ test('webhook signature: valid, tampered body, stale timestamp, wrong secret', (
   assert.equal(verifyWebhook('whsec_' + Buffer.from('other').toString('base64'), h, body, 1800000100), false);
   assert.equal(verifyWebhook(secret, { ...h, signature: 'v1,AAAA ' + sig }, body, 1800000100), true); // multiple signatures
 });
+
+test('rescheduling a pickup tells the agent no, then the next run proposes the items again with the new date', async () => {
+  const { app, bridge, db, deps } = await boot();
+  const first = await app.startRun('disposition', {});
+  let moved: any = null;
+  await until(async () => {
+    const pend = await db.all("SELECT approval_id,input FROM approvals WHERE state='pending'");
+    for (const a of pend) {
+      if (!moved) { moved = JSON.parse(a.input); await bridge.rescheduleApproval(deps, a.approval_id, '2026-11-21'); }
+      else await bridge.resolveApproval(deps, a.approval_id, false);
+    }
+    return !!(await db.all('SELECT finished_at FROM runs WHERE session_id=?', [first.sessionId]))[0].finished_at;
+  });
+  assert.equal((await db.all("SELECT state FROM approvals WHERE state='rescheduled'")).length, 1);
+  assert.equal((await db.all('SELECT 1 FROM pickups')).length, 0);
+  await assert.rejects(bridge.rescheduleApproval(deps, 'nope', '2026-11-21'), /unknown approval/);
+  const second = await app.startRun('disposition', {});
+  await until(async () => {
+    for (const a of await db.all("SELECT approval_id FROM approvals WHERE state='pending'")) await bridge.resolveApproval(deps, a.approval_id, true);
+    return !!(await db.all('SELECT finished_at FROM runs WHERE session_id=?', [second.sessionId]))[0].finished_at;
+  });
+  const booked = await db.all('SELECT items,deadline FROM pickups');
+  const hit = booked.find((b: any) => moved.items.every((k: string) => JSON.parse(b.items).includes(k)));
+  assert.ok(hit, 'rescheduled items are proposed and booked again');
+  assert.equal(hit.deadline, '2026-11-21');
+});

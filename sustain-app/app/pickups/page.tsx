@@ -1,10 +1,11 @@
 'use client';
+import Link from 'next/link';
 import { useState } from 'react';
 import { Ico } from '@/components/icons';
 import { Sheet, Opt, useToast } from '@/components/Sheet';
 import { SwipeCard, type Dir } from '@/components/Swipe';
 import Top from '@/components/Top';
-import { fmtDate, plural, routeName } from '@/lib/plain';
+import { addDays, fmtDate, plural, RESCHEDULE_DAYS, routeName } from '@/lib/plain';
 import { post, useAppState } from '@/lib/useAppState';
 
 const short = (items: string[] = []) => (items.length > 6 ? `${items.slice(0, 6).join(', ')} and ${items.length - 6} more` : items.join(', '));
@@ -39,7 +40,7 @@ export default function Pickups() {
   const { snap, reload } = useAppState(1000);
   const { toast, say } = useToast();
   const [exit, setExit] = useState<Dir | null>(null);
-  const [sheet, setSheet] = useState<null | 'options' | 'who'>(null);
+  const [sheet, setSheet] = useState<null | 'options' | 'who' | 'date'>(null);
   const [doc, setDoc] = useState<any>(null);
   const [gone, setGone] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export default function Pickups() {
   const fly = (d: Dir) => {
     if (!top || exit) return;
     setExit(d);
-    setTimeout(() => { if (d === 'right') send(top, { allow: true }, 'Booked. Thank you.'); else { setExit(null); setSheet('options'); } }, 220);
+    setTimeout(() => { if (d === 'right') send(top, { allow: true }, 'Approval sent. Waiting for booking confirmation.'); else { setExit(null); setSheet('options'); } }, 220);
   };
 
   return (<>
@@ -72,11 +73,12 @@ export default function Pickups() {
           {nxt && <div className="sc next gate"><Face a={nxt} partner={partner(nxt.input?.partner_id)} /></div>}
           <SwipeCard key={top.approval_id} exit={exit} onDir={fly}><Face a={top} partner={partner(top.input?.partner_id)} /></SwipeCard>
         </div>
-        <div className="choices">
-          <button className="btn-no" onClick={() => fly('left')}>{Ico.x}Not yet</button>
+        <div className="choices three">
+          <button className="btn-no" onClick={() => send(top, { allow: false }, 'Not booked. It can come back on the next run.')}>{Ico.x}Do not book</button>
+          <button className="btn-alt" onClick={() => setSheet('date')}>{Ico.calendar}Reschedule</button>
           <button className="btn-yes" onClick={() => fly('right')}>{Ico.check}Yes, book it</button>
         </div>
-        <p className="hint">Swipe right to book, left for other choices.</p>
+        <p className="hint">“Do not book” is not final: the items come back on the next run. Swipe right to book, left for more choices.</p>
       </>) : running ? (
         <div className="done"><div className="tick"><span className="spin" style={{ margin: 0 }} /></div><h2>Looking for items that are due</h2><p>Pickup proposals appear here for your yes.</p></div>
       ) : booked.length === 0 ? (
@@ -89,17 +91,25 @@ export default function Pickups() {
             <button className="alt" style={{ marginTop: 8, minHeight: 44, padding: '8px 16px' }} onClick={() => setDoc(p)}>Open pickup request</button></div></div>))}
       </>)}
       {err && <p className="err">{err}</p>}
+      <div className="foot"><Link href="/dropoffs">Textile drop-off directory</Link></div>
     </main>
     {sheet === 'options' && top && (
       <Sheet title="What should we do?" sub={`${routeName(top.input?.route)} pickup for ${fmtDate(top.input?.deadline)}`} onClose={() => setSheet(null)}>
         <Opt icon={Ico.person} tone="warn" title="Send to someone" help="They decide. It stays here until someone answers." onClick={() => setSheet('who')} />
-        <Opt icon={Ico.x} tone="bad" title="Do not book it" help="The agent is told no and sends an alert" onClick={() => send(top, { allow: false }, 'Not booked.')} />
+        <Opt icon={Ico.calendar} title="Reschedule" help="Pick a later hand-over date" onClick={() => setSheet('date')} />
+        <Opt icon={Ico.x} tone="bad" title="Do not book it" help="The agent is told no. The items come back on the next run." onClick={() => send(top, { allow: false }, 'Not booked. It can come back on the next run.')} />
+      </Sheet>)}
+    {sheet === 'date' && top && (
+      <Sheet title="Pick a new date" sub={`Now: ${fmtDate(top.input?.deadline)}. The agent is told, and proposes it again with the new date.`} onClose={() => setSheet(null)}>
+        {RESCHEDULE_DAYS.map((n) => { const d = addDays(top.input?.deadline, n); return (
+          <Opt key={n} icon={Ico.calendar} title={fmtDate(d)} help={`${n} days later`} onClick={() => send(top, { reschedule: { deadline: d } }, `Moved to ${fmtDate(d)}.`)} />); })}
       </Sheet>)}
     {sheet === 'who' && top && (
       <Sheet title="Who should decide?" sub="The booking stays in the queue until they answer." onClose={() => setSheet('options')}>
         {(snap?.people ?? []).map((p: any) => (<Opt key={p.name} icon={Ico.person} title={p.name} onClick={() => send(top, { send: { to: p.name } }, `Sent to ${p.name}.`, false)} />))}
       </Sheet>)}
     {doc && (<Sheet title="Pickup request" onClose={() => setDoc(null)}><RequestDoc p={doc} partner={partner(doc.partner_id)} />
+      {snap?.pickupDownloads && doc.session_id && <p><a href={`/api/pickups/${encodeURIComponent(doc.booking_id)}/artifact`} target="_blank" rel="noreferrer">Download ZooWork request</a></p>}
       <button className="big" style={{ marginBottom: 8 }} onClick={() => window.print()}>Print</button></Sheet>)}
     {toast}
   </>);

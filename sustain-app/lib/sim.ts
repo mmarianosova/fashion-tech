@@ -1,6 +1,7 @@
 // Scripted stand-ins for the two ZooWork agents. They emit the SAME events the real agents would
 // (custom tool calls, approval requests, run.finished) into the SAME bridge, so tests, the replay
 // preview, and ZOO_MODE=fake exercise the real app code path. They cost nothing.
+import { routeFor, dueReasons } from './rules.ts';
 import type { Db } from './db.ts';
 import { p } from './db.ts';
 import { handleEvent, type Deps } from './bridge.ts';
@@ -33,28 +34,45 @@ export async function simulateIntake(d: Deps, sid: string, batchId: string, o: {
   await emit(d, sid, { type: 'run.finished', status: 'succeeded' });
 }
 
-export async function simulateDisposition(d: Deps, sid: string, today: string, mcp: McpDeps, o: { wait: Wait }) {
+export async function simulateDisposition(d: Deps, sid: string, today: string, mcp: McpDeps, o: { wait: Wait; overrides?: Record<string, string> }) {
   const lid = await call(d, sid, 'list_inventory', { today });
   const inv = await callResult(d.db, lid);
   const rows: InvRow[] = inv.items;
-  const recyclers: Recycler[] = mcp.recyclers;
+  const routes = new Set(rows.filter((row) => row.status === 'tagged' && row.alert_status !== 'sent' && dueReasons(row, today).length)
+    .map(routeFor).filter((route) => route !== 'dispose' && route !== 'review'));
+  const partners = await Promise.all([...routes].map((route) => callTool(mcp, 'search_recyclers', { route })));
+  const recyclers: Recycler[] = [...new Map<string, Recycler>(partners.flatMap((result) =>
+    (result.data.recyclers as Recycler[]).map((partner) => [partner.id, partner]))).values()];
   const pl = plan(rows, recyclers, today);
 
   for (const pk of pl.pickups) {
     const approval_id = `appr_${sid}_${++n}`;
-    const input = { partner_id: pk.partner_id, route: pk.route, items: pk.items, lots: pk.lots, deadline: pk.deadline };
+    const later = pk.items.map((k: string) => o.overrides?.[k]).filter(Boolean) as string[]; // a person moved these to a later date
+    const deadline = later.length ? later.sort().at(-1)! : pk.deadline;
+    const input = { partner_id: pk.partner_id, route: pk.route, items: pk.items, lots: pk.lots, deadline };
     await emit(d, sid, { type: 'approval.requested', approval_id, tool: 'mcp__recyclerdirectory__book_pickup', input });
     await o.wait(async () => (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approval_id]))[0]?.state !== 'pending');
     const st = (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approval_id]))[0].state;
     const partner = recyclers.find((r) => r.id === pk.partner_id)!;
+    let booking;
     if (st === 'allowed') {
-      await callTool(mcp, 'book_pickup', input);
-      await call(d, sid, 'send_alert', { type: 'donate_recycle_due', items: pk.items, location: pk.locations.join(', '), deadline: pk.deadline,
-        next_step: `Hand over to ${partner.name} at ${partner.address} by ${pk.deadline}`, recycler_address: partner.address,
-        summary: `${pk.items.length} ${pk.route.replace('_', ' ')} items ready for pickup, ${pk.deadline}` });
+      const attempt = () => callTool({ ...mcp, today }, 'book_pickup', input)
+        .catch(() => ({ data: { error: 'internal_error' }, isError: true }));
+      booking = await attempt();
+      if (booking.isError && booking.data.error === 'internal_error') booking = await attempt();
+    }
+    if (booking && !booking.isError) {
+      await call(d, sid, 'send_alert', { type: 'donate_recycle_due', items: pk.items, location: pk.locations.join(', '), deadline,
+        next_step: `Hand over to ${partner.name} at ${partner.address} by ${deadline}`, recycler_address: partner.address,
+        summary: `${pk.items.length} ${pk.route.replace('_', ' ')} items ready for pickup, ${deadline}` });
+    } else if (st === 'rescheduled') {
+      const to = (await d.db.all('SELECT resched_to FROM approvals WHERE approval_id=?', [approval_id]))[0].resched_to;
+      await call(d, sid, 'send_alert', { type: 'review_waiting', items: pk.items, location: pk.locations.join(', '),
+        next_step: `Moved to ${to}. It will be proposed again on the next run.`, summary: `${pk.route.replace('_', ' ')} pickup rescheduled to ${to}` });
     } else {
       await call(d, sid, 'send_alert', { type: 'review_waiting', items: pk.items, location: pk.locations.join(', '),
-        next_step: 'Pickup booking was denied. Choose another partner or hold the items.', summary: `${pk.route} pickup denied, review needed` });
+        next_step: booking ? 'Review the booking error before trying again.' : 'Not booked. These items will be proposed again on the next run.',
+        summary: booking ? `${pk.route} pickup: ${booking.data.error}, review needed` : `${pk.route} pickup not booked` });
     }
   }
   const text: Record<string, string> = {

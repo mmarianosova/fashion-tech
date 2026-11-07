@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { assessIntake, type CatalogRow, type ProductLookup } from '../lib/intake.ts';
 import { handleEvent, resolveReview } from '../lib/bridge.ts';
 import { simulateIntake } from '../lib/sim.ts';
+import { tools } from '../lib/tools.ts';
 import { setup } from './helpers.ts';
 
 const link = 'https://www.macys.com/shop/product/test?ID=123&cm_kws=123456789012';
@@ -177,6 +178,8 @@ test('material-only catalog intake stores outer and lining separately and exclud
     outer: [{ fibre: 'leather', pct: 100 }], lining: [{ fibre: 'polyester', pct: 100 }],
   });
   assert.equal((await db.all("SELECT status FROM inventory WHERE item_key='M:T123'"))[0].status, 'material_tagged');
+  const disposition = await tools.list_inventory({ ...deps, sessionId: 'disposition', callId: 'list' }, { today: '2026-11-07' });
+  assert.equal(disposition.items.some((item: { item_key: string }) => item.item_key === 'M:T123'), false);
 });
 
 test('batch results retain catalog evidence and show the reviewer’s final material', async () => {
