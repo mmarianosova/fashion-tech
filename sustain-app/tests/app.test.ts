@@ -85,3 +85,26 @@ test('rescheduling a pickup tells the agent no, then the next run proposes the i
   assert.ok(hit, 'rescheduled items are proposed and booked again');
   assert.equal(hit.deadline, '2026-11-21');
 });
+
+test('Textile Flow reads agent results and records review decisions without inventing pickups', async () => {
+  const { app, db, deps } = await boot();
+  const { textileInputs, handleTextileEvent } = await import('../lib/textile-flow.ts');
+  const { tools } = await import('../lib/tools.ts');
+  const { items } = await tools.get_batch({ ...deps, sessionId: 'textile-flow', callId: 'get' }, { batch_id: 'SEED-1' });
+  const item = items.find((i: any) => i.item_key === 'T-001');
+  await tools.hold_for_review({ ...deps, sessionId: 'textile-flow', callId: 'hold' }, {
+    item_key: item.item_key, proposed_tags: item.assessment.tags, confidence: 0.8, reason: 'Verify test label',
+  });
+  const input = textileInputs(await app.snapshot());
+  const review = input.reviews.find((r) => r.item === item.item_key)!;
+  assert.equal(review.state, 'pending');
+  assert.match(review.label, /100% COTTON/);
+  await assert.rejects(handleTextileEvent(deps, { id: 'wrong', mode: 'live', type: 'review.decision',
+    item: 'OTHER', review_id: review.id, decision: 'approve' }), /does not match/);
+  await handleTextileEvent(deps, { id: 'correct', mode: 'live', type: 'review.decision',
+    item: item.item_key, review_id: review.id, decision: 'approve' });
+  const saved = textileInputs(await app.snapshot());
+  assert.equal(saved.items.find((i) => i.key === item.item_key)?.fibre, 'cotton');
+  assert.equal(saved.reviews.find((r) => r.id === review.id)?.state, 'approved');
+  assert.equal((await db.all('SELECT * FROM pickups')).length, 0);
+});
