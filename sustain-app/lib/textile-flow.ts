@@ -14,7 +14,7 @@ export function textileInputs(s: Awaited<ReturnType<typeof snapshot>>) {
     items: s.items.map((i) => ({ key: i.item_key, garment: i.garment_type, color: i.color,
       label: i.label_text, state: i.state, stream: i.stream, fibre: i.fibre_type,
       color_group: i.color_group, confidence: i.confidence, condition: i.condition })),
-    reviews: s.reviews.filter((r) => keys.has(r.item_key)).map((r) => ({
+    reviews: s.reviews.filter((r) => keys.has(r.item_key)).reverse().map((r) => ({
       id: r.review_id, item: r.item_key, label: r.label_text, proposed: r.proposed_tags,
       reason: r.reason, state: r.state,
     })),

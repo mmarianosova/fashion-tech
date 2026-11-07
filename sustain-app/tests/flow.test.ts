@@ -40,8 +40,11 @@ test('route and due-reason edge cases', () => {
 test('Intake run end to end: holds wait for a person, scores perfectly', async () => {
   const { db, deps, zoo } = await setup();
   const wait = async (check: () => Promise<boolean>) => {
-    // the "person": approve every pending review the first time we are asked to wait
-    for (const r of await db.all("SELECT review_id FROM reviews WHERE state='pending'")) {
+    // The full review queue is visible before the agent waits for a decision.
+    const pending = await db.all("SELECT review_id FROM reviews WHERE state='pending'");
+    assert.equal(pending.length, J('expected_intake.json').filter((item: any) => item.hold).length);
+    assert.equal(await check(), false);
+    for (const r of pending) {
       await resolveReview(deps, r.review_id, 'approve');
     }
     assert.ok(await check());

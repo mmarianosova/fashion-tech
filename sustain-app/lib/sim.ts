@@ -22,14 +22,18 @@ async function call(d: Deps, sid: string, name: string, input: any) {
 export async function simulateIntake(d: Deps, sid: string, batchId: string, o: { threshold: number; wait: Wait }) {
   const gid = await call(d, sid, 'get_batch', { batch_id: batchId });
   const { items } = await callResult(d.db, gid);
+  const reviewCalls: string[] = [];
   for (const it of items) {
     const { tags, status, confidence, reason } = it.assessment;
     if (status === 'needs_review' || confidence < o.threshold) {
-      const cid = await call(d, sid, 'hold_for_review', { item_key: it.item_key, reason, proposed_tags: tags, confidence });
-      await o.wait(async () => (await d.db.all('SELECT state FROM reviews WHERE call_id=?', [cid]))[0]?.state !== 'pending');
+      reviewCalls.push(await call(d, sid, 'hold_for_review', { item_key: it.item_key, reason, proposed_tags: tags, confidence }));
     } else {
       await call(d, sid, 'save_tags', { item_key: it.item_key, tags, confidence, reason });
     }
+  }
+  if (reviewCalls.length) {
+    await o.wait(async () => !(await d.db.all(`SELECT 1 FROM reviews WHERE state='pending'
+      AND call_id IN (SELECT value FROM json_each(?)) LIMIT 1`, [JSON.stringify(reviewCalls)])).length);
   }
   await emit(d, sid, { type: 'run.finished', status: 'succeeded' });
 }
