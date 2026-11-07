@@ -1,0 +1,79 @@
+// Scripted stand-ins for the two ZooWork agents. They emit the SAME events the real agents would
+// (custom tool calls, approval requests, run.finished) into the SAME bridge, so tests, the replay
+// preview, and ZOO_MODE=fake exercise the real app code path. They cost nothing.
+import type { Db } from './db.ts';
+import { p } from './db.ts';
+import { handleEvent, type Deps } from './bridge.ts';
+import { callTool, type McpDeps } from './mcp.ts';
+import { parseLabelText, plan, shouldHold, tagItem, type InvRow, type Recycler } from './rules.ts';
+
+type Wait = (check: () => Promise<boolean>) => Promise<void>;
+let n = 0;
+const emit = (d: Deps, sid: string, e: any) => handleEvent(d, sid, { id: `${sid}:${++n}`, cursor: `${sid}:${n}`, ...e });
+const callResult = async (db: Db, callId: string) => p((await db.all('SELECT result FROM handled_calls WHERE call_id=?', [callId]))[0]?.result);
+
+async function call(d: Deps, sid: string, name: string, input: any) {
+  const call_id = `call_${sid}_${++n}`;
+  await emit(d, sid, { type: 'agent.custom_tool_use', call_id, name, input });
+  return call_id;
+}
+
+export async function simulateIntake(d: Deps, sid: string, batchId: string, o: { threshold: number; wait: Wait }) {
+  const gid = await call(d, sid, 'get_batch', { batch_id: batchId });
+  const { items } = await callResult(d.db, gid);
+  for (const it of items) {
+    const label = parseLabelText(it.label_text);
+    const conflict = /^photo shows/i.test(it.visible_note || '');
+    const tags = tagItem(it.garment_type, label.fibre, it.color, it.condition);
+    const hold = shouldHold(label, conflict);
+    const confidence = conflict ? 0.4 : hold ? 0.6 : 0.95;
+    const reason = conflict ? 'Label and garment disagree: ' + it.visible_note
+      : !label.legible ? 'No readable fibre content on label'
+      : !label.sumOk ? 'Fibre percentages do not add to 100'
+      : `${label.fibre!.map((f) => `${f.pct}% ${f.fibre}`).join(', ')}, so ${tags.stream}`;
+    if (confidence < o.threshold) {
+      const cid = await call(d, sid, 'hold_for_review', { item_key: it.item_key, reason, proposed_tags: tags, confidence });
+      await o.wait(async () => (await d.db.all('SELECT state FROM reviews WHERE call_id=?', [cid]))[0]?.state !== 'pending');
+    } else {
+      await call(d, sid, 'save_tags', { item_key: it.item_key, tags, confidence, reason });
+    }
+  }
+  await emit(d, sid, { type: 'run.finished', status: 'succeeded' });
+}
+
+export async function simulateDisposition(d: Deps, sid: string, today: string, mcp: McpDeps, o: { wait: Wait }) {
+  const lid = await call(d, sid, 'list_inventory', { today });
+  const inv = await callResult(d.db, lid);
+  const rows: InvRow[] = inv.items;
+  const recyclers: Recycler[] = mcp.recyclers;
+  const pl = plan(rows, recyclers, today);
+
+  for (const pk of pl.pickups) {
+    const approval_id = `appr_${sid}_${++n}`;
+    const input = { partner_id: pk.partner_id, route: pk.route, items: pk.items, lots: pk.lots, deadline: pk.deadline };
+    await emit(d, sid, { type: 'approval.requested', approval_id, tool: 'mcp__recyclerdirectory__book_pickup', input });
+    await o.wait(async () => (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approval_id]))[0]?.state !== 'pending');
+    const st = (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approval_id]))[0].state;
+    const partner = recyclers.find((r) => r.id === pk.partner_id)!;
+    if (st === 'allowed') {
+      await callTool(mcp, 'book_pickup', input);
+      await call(d, sid, 'send_alert', { type: 'donate_recycle_due', items: pk.items, location: pk.locations.join(', '), deadline: pk.deadline,
+        next_step: `Hand over to ${partner.name} at ${partner.address} by ${pk.deadline}`, recycler_address: partner.address,
+        summary: `${pk.items.length} ${pk.route.replace('_', ' ')} items ready for pickup, ${pk.deadline}` });
+    } else {
+      await call(d, sid, 'send_alert', { type: 'review_waiting', items: pk.items, location: pk.locations.join(', '),
+        next_step: 'Pickup booking was denied. Choose another partner or hold the items.', summary: `${pk.route} pickup denied, review needed` });
+    }
+  }
+  const text: Record<string, string> = {
+    dispose_confirm: 'Confirm disposal of unusable items', below_minimum: 'Below the partner minimum: hold until more arrive or approve another partner',
+    no_partner: 'No partner accepts this route: choose one',
+  };
+  for (const e of pl.escalations) {
+    const locs = [...new Set(rows.filter((r) => e.items.includes(r.item_key)).map((r) => r.location))].join(', ');
+    await call(d, sid, 'send_alert', { type: 'review_waiting', items: e.items, location: locs, next_step: text[e.reason] ?? e.reason,
+      summary: `${e.items.length} items: ${e.reason.replace('_', ' ')}` });
+  }
+  await emit(d, sid, { type: 'run.finished', status: 'succeeded' });
+  return pl;
+}

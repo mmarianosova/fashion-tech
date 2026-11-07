@@ -1,0 +1,22 @@
+{
+  "_note": "Schedules fire as soon as enabled and a stopped agent skips firings. For the demo, create with a far-future cron so it never fires on its own, and trigger the same message manually. Delete schedules before deleting the agent. Use five-field cron plus tz.",
+  "schedule_id": "disposition-daily",
+  "schedule": {"kind": "cron", "expr": "0 9 1 1 *", "tz": "UTC"},
+  "payload": {
+    "kind": "agentTurn",
+    "message": "Run the daily disposition review. Today is {{TODAY}}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary."
+  },
+  "sessionTarget": "isolated",
+  "enabled": false,
+  "outcome": {
+    "maxIterations": 2,
+    "publish": "after_satisfied",
+    "rubric": [
+      "Every item that is due according to the disposition rules was routed or escalated; none were silently dropped.",
+      "No item that is held, not due, or already alerted appears in a pickup or alert.",
+      "No pickup mixes recycle_mixed items into shred, mixes colour groups in a shred lot, or falls below the partner's minimum.",
+      "Each booked pickup has exactly one donate_recycle_due alert, and each escalation has exactly one review_waiting alert.",
+      "The final summary lists counts and a reason for each skipped or escalated group."
+    ]
+  }
+}

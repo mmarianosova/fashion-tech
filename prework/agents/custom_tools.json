@@ -1,0 +1,94 @@
+{
+  "_note": "Field names (name/description/input_schema) follow the generic tool-definition shape. Verify against the SDK create_agent example in the smoke test and adjust if the key names differ. Max 32 tools per agent, schema <= 16 KiB each.",
+  "intake": [
+    {
+      "name": "get_batch",
+      "description": "Return the items in an intake batch. Each item has item_key, garment_type, color, category, label_text (may be empty), image_path (a file under /workspace, may be null), visible_note, condition.",
+      "input_schema": {
+        "type": "object",
+        "properties": {"batch_id": {"type": "string"}},
+        "required": ["batch_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "save_tags",
+      "description": "Save the final tags for one item. Call once per item that passed the confidence threshold or was approved by a person.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "item_key": {"type": "string"},
+          "tags": {
+            "type": "object",
+            "properties": {
+              "stream": {"enum": ["mixed", "shred", "denim", "trash"]},
+              "fibre_type": {"type": "string"},
+              "color_group": {"enum": ["whites", "darks", "brights", "mixed"]},
+              "condition": {"enum": ["wearable", "damaged", "unusable"]}
+            },
+            "required": ["stream", "fibre_type", "color_group", "condition"],
+            "additionalProperties": false
+          },
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "reason": {"type": "string"},
+          "label_data": {
+            "type": "object",
+            "properties": {
+              "fibre": {"type": "array", "items": {"type": "object", "properties": {"fibre": {"type": "string"}, "pct": {"type": "integer"}}, "required": ["fibre", "pct"]}},
+              "origin": {"type": ["string", "null"]},
+              "rn": {"type": ["string", "null"]}
+            }
+          }
+        },
+        "required": ["item_key", "tags", "confidence", "reason"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "hold_for_review",
+      "description": "Ask a person to decide on an item you are not confident about. This call waits until the person answers. Returns {decision: approve|edit|reject, tags?}. Use when confidence is below the threshold or label and garment disagree.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "item_key": {"type": "string"},
+          "reason": {"type": "string"},
+          "proposed_tags": {"type": "object"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "label_data": {"type": "object"}
+        },
+        "required": ["item_key", "reason", "confidence"],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "disposition": [
+    {
+      "name": "list_inventory",
+      "description": "Return all tagged inventory rows as of the given date. Each row: item_key, category, tags{stream,fibre_type,color_group,condition}, location, season, received_date, return_window_close, item_due_date, alert_status (none|sent), status (tagged|held).",
+      "input_schema": {
+        "type": "object",
+        "properties": {"today": {"type": "string", "description": "ISO date, YYYY-MM-DD"}},
+        "required": ["today"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "send_alert",
+      "description": "Send one notification to the responsible person and mark the listed items as alerted. Call once per decision. Types: donate_recycle_due, review_waiting, dispute_deadline, delay_risk.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "type": {"enum": ["donate_recycle_due", "review_waiting", "dispute_deadline", "delay_risk"]},
+          "items": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "location": {"type": "string"},
+          "deadline": {"type": "string"},
+          "next_step": {"type": "string"},
+          "recycler_address": {"type": "string"},
+          "summary": {"type": "string", "description": "One line, used in the subject: [TYPE] summary, deadline"}
+        },
+        "required": ["type", "items", "next_step", "summary"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

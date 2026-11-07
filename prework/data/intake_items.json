@@ -1,0 +1,322 @@
+[
+ {
+  "item_key": "T-001",
+  "garment_type": "t-shirt",
+  "color": "white",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN INDIA  RN 12345",
+  "visible_note": "",
+  "condition": "wearable",
+  "image_path": null
+ },
+ {
+  "item_key": "T-002",
+  "garment_type": "t-shirt",
+  "color": "black",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN INDIA  RN 12345",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "T-003",
+  "garment_type": "t-shirt",
+  "color": "navy",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN BANGLADESH  RN 12345",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "T-004",
+  "garment_type": "sweatshirt",
+  "color": "red",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN PAKISTAN  RN 12345",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "T-005",
+  "garment_type": "t-shirt",
+  "color": "cream",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN INDIA  RN 12345",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "T-006",
+  "garment_type": "button-down shirt",
+  "color": "white",
+  "category": "tops",
+  "label_text": "100% COTTON  IMPORTED  RN 12345",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "T-007",
+  "garment_type": "t-shirt",
+  "color": "royal blue",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN INDIA  RN 12345",
+  "visible_note": "",
+  "condition": "wearable",
+  "image_path": null
+ },
+ {
+  "item_key": "T-008",
+  "garment_type": "hoodie",
+  "color": "charcoal",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN VIETNAM  RN 12345",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "B-001",
+  "garment_type": "t-shirt",
+  "color": "black",
+  "category": "tops",
+  "label_text": "60% COTTON 40% POLYESTER  MADE IN INDIA",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "B-002",
+  "garment_type": "leggings",
+  "color": "black",
+  "category": "bottoms",
+  "label_text": "90% POLYESTER 10% SPANDEX  MADE IN CHINA",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "B-003",
+  "garment_type": "blouse",
+  "color": "pink",
+  "category": "tops",
+  "label_text": "100% POLYESTER  MADE IN CHINA",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "B-004",
+  "garment_type": "cardigan",
+  "color": "grey",
+  "category": "tops",
+  "label_text": "55% ACRYLIC 45% WOOL  MADE IN CHINA",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "B-005",
+  "garment_type": "dress",
+  "color": "teal",
+  "category": "dresses",
+  "label_text": "95% VISCOSE 5% ELASTANE  MADE IN INDIA",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "B-006",
+  "garment_type": "polo",
+  "color": "white",
+  "category": "tops",
+  "label_text": "50% COTTON 50% POLYESTER  MADE IN INDIA",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "D-001",
+  "garment_type": "jeans",
+  "color": "indigo",
+  "category": "bottoms",
+  "label_text": "98% COTTON 2% ELASTANE  MADE IN MEXICO",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "D-002",
+  "garment_type": "denim jacket",
+  "color": "light wash",
+  "category": "outerwear",
+  "label_text": "100% COTTON  MADE IN TURKEY",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "D-003",
+  "garment_type": "jeans",
+  "color": "black",
+  "category": "bottoms",
+  "label_text": "99% COTTON 1% SPANDEX  MADE IN MEXICO",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "D-004",
+  "garment_type": "denim shorts",
+  "color": "light wash",
+  "category": "bottoms",
+  "label_text": "100% COTTON  MADE IN TURKEY",
+  "visible_note": "",
+  "condition": "wearable",
+  "image_path": null
+ },
+ {
+  "item_key": "D-005",
+  "garment_type": "jeans",
+  "color": "dark wash",
+  "category": "bottoms",
+  "label_text": "80% COTTON 20% POLYESTER  MADE IN CHINA",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "N-001",
+  "garment_type": "linen shirt",
+  "color": "ivory",
+  "category": "tops",
+  "label_text": "100% LINEN  MADE IN PORTUGAL",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "N-002",
+  "garment_type": "wool sweater",
+  "color": "burgundy",
+  "category": "tops",
+  "label_text": "100% WOOL  MADE IN ITALY",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "N-003",
+  "garment_type": "silk blouse",
+  "color": "pink",
+  "category": "tops",
+  "label_text": "100% SILK  MADE IN CHINA",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "N-004",
+  "garment_type": "hemp tote",
+  "color": "tan",
+  "category": "accessories",
+  "label_text": "100% HEMP  MADE IN NEPAL",
+  "visible_note": "",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "M-001",
+  "garment_type": "t-shirt",
+  "color": "white",
+  "category": "tops",
+  "label_text": "",
+  "visible_note": "care tag cut out; no fibre content visible",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "M-002",
+  "garment_type": "sweater",
+  "color": "grey",
+  "category": "tops",
+  "label_text": "MADE IN ??  RN 1",
+  "visible_note": "fibre line smudged and unreadable",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "M-003",
+  "garment_type": "scarf",
+  "color": "multi",
+  "category": "accessories",
+  "label_text": "",
+  "visible_note": "no label",
+  "condition": "wearable",
+  "image_path": null
+ },
+ {
+  "item_key": "X-001",
+  "garment_type": "t-shirt",
+  "color": "black",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN INDIA",
+  "visible_note": "photo shows a shiny stretch knit, looks synthetic",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "X-002",
+  "garment_type": "hoodie",
+  "color": "navy",
+  "category": "tops",
+  "label_text": "100% POLYESTER  MADE IN CHINA",
+  "visible_note": "photo shows a heavy brushed cotton fleece",
+  "condition": "damaged",
+  "image_path": null
+ },
+ {
+  "item_key": "U-001",
+  "garment_type": "t-shirt",
+  "color": "white",
+  "category": "tops",
+  "label_text": "100% COTTON  MADE IN INDIA",
+  "visible_note": "mildew through the fabric",
+  "condition": "unusable",
+  "image_path": null
+ },
+ {
+  "item_key": "U-002",
+  "garment_type": "jeans",
+  "color": "indigo",
+  "category": "bottoms",
+  "label_text": "100% COTTON  MADE IN MEXICO",
+  "visible_note": "oil contamination",
+  "condition": "unusable",
+  "image_path": null
+ },
+ {
+  "item_key": "S-001",
+  "garment_type": "swim top",
+  "color": "pink",
+  "category": "swimwear",
+  "label_text": "80% NYLON 20% SPANDEX  MADE IN CHINA",
+  "visible_note": "",
+  "condition": "wearable",
+  "image_path": null
+ },
+ {
+  "item_key": "S-002",
+  "garment_type": "bra",
+  "color": "white",
+  "category": "intimates",
+  "label_text": "92% NYLON 8% SPANDEX  MADE IN CHINA",
+  "visible_note": "",
+  "condition": "wearable",
+  "image_path": null
+ }
+]

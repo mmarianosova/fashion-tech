@@ -1,0 +1,22 @@
+:root{--bg:#f7f6f2;--card:#fff;--ink:#1d2320;--mute:#5d6a63;--line:#dcdfd8;--green:#1f6f4a;--amber:#a15c00;--red:#a62b2b;--blue:#1d4f91}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:20px}
+nav{background:var(--ink);color:#fff;display:flex;gap:6px;align-items:center;padding:10px 20px;flex-wrap:wrap}
+nav b{margin-right:18px}nav a{color:#dfe7e2;text-decoration:none;padding:6px 12px;border-radius:6px}nav a.on{background:#fff;color:var(--ink)}
+.badge{background:var(--red);color:#fff;border-radius:10px;padding:0 7px;font-size:12px;margin-left:6px}
+.mode{margin-left:auto;font-size:13px;opacity:.8}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:20px 0 8px}p.sub{color:var(--mute);margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.grow{flex:1}
+button{font:inherit;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:8px;padding:8px 16px;cursor:pointer}
+button.alt{background:#fff;color:var(--ink)}button.go{background:var(--green);border-color:var(--green)}button.no{background:var(--red);border-color:var(--red)}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mute);font-weight:600}
+.pill{display:inline-block;padding:1px 9px;border-radius:10px;font-size:12px;font-weight:600;border:1px solid}
+.p-tagged,.p-allowed,.p-approved,.p-edited{color:var(--green);border-color:var(--green)}.p-held,.p-pending{color:var(--amber);border-color:var(--amber)}
+.p-rejected,.p-denied{color:var(--red);border-color:var(--red)}.p-new,.p-none{color:var(--mute);border-color:var(--line)}.p-sent{color:var(--blue);border-color:var(--blue)}
+.stat{min-width:110px}.stat b{display:block;font-size:26px}.stat span{color:var(--mute);font-size:13px}
+.feed{font:12px/1.5 ui-monospace,monospace;max-height:230px;overflow:auto;background:#101513;color:#c9e7d6;border-radius:8px;padding:10px}
+.empty{color:var(--mute);padding:14px;text-align:center}.err{color:var(--red)}
+.tagrow{display:flex;gap:8px;flex-wrap:wrap}.alert-unread{border-left:5px solid var(--amber)}

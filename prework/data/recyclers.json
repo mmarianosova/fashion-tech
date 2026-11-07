@@ -1,0 +1,43 @@
+[
+ {
+  "id": "R-DON",
+  "name": "Greenway Donation Network (fictional)",
+  "accepts": [
+   "donate"
+  ],
+  "min_items": 3,
+  "address": "100 Giving Way",
+  "contact": "pickups@greenway.example"
+ },
+ {
+  "id": "R-SHR",
+  "name": "Fiber Loop Shredders (fictional)",
+  "accepts": [
+   "recycle_shred"
+  ],
+  "min_items": 4,
+  "address": "7 Mill Rd",
+  "contact": "intake@fiberloop.example",
+  "notes": "colour-sorted lots"
+ },
+ {
+  "id": "R-DEN",
+  "name": "Blue Cycle Denim (fictional)",
+  "accepts": [
+   "recycle_denim"
+  ],
+  "min_items": 3,
+  "address": "22 Indigo St",
+  "contact": "denim@bluecycle.example"
+ },
+ {
+  "id": "R-MIX",
+  "name": "Mixed Fibre Co-op (fictional)",
+  "accepts": [
+   "recycle_mixed"
+  ],
+  "min_items": 10,
+  "address": "5 Co-op Ln",
+  "contact": "mixed@coop.example"
+ }
+]

@@ -1,0 +1,25 @@
+{
+  "_note": "Template. Fill model.primary at the smoke test (a cheap text model is enough). MCP url is the deployed recycler-directory server (public HTTPS, no auth, no redirects). Attach skills disposition-rules and reverse-logistics with put_agent_skill. tool_policy is replaced whole on every update, so always send the full object.",
+  "name": "sustain-disposition",
+  "model": {"primary": "PICK_AT_SMOKE_TEST", "max_tokens": 4096, "thinking": "low"},
+  "persona": {"docs": [{"name": "AGENTS.md", "file": "agents/disposition/AGENTS.md"}]},
+  "include_global_skills": false,
+  "sandbox": {"scope": "agent"},
+  "tool_policy": {
+    "deny": ["exec", "process", "cron", "apply_patch", "web_search", "web_fetch", "web_image_search"]
+  },
+  "mcp": [
+    {
+      "name": "recyclerdirectory",
+      "url": "https://REPLACE-WITH-DEPLOYED-HOST/mcp",
+      "transport": "streamable-http",
+      "toolFilter": ["search_recyclers", "book_pickup"],
+      "exposure": "direct",
+      "permission": "always_allow",
+      "tools": {"book_pickup": {"permission": "always_ask"}}
+    }
+  ],
+  "custom_tools": "see agents/custom_tools.json key 'disposition'",
+  "labels": {"app": "sustain", "role": "disposition"},
+  "_mcp_naming": "Server name has no underscores, so tools appear as mcp__recyclerdirectory__search_recyclers and mcp__recyclerdirectory__book_pickup. The skills say search_recyclers and book_pickup; the agent maps them."
+}
