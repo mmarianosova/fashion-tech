@@ -3,3 +3,5 @@ node_modules
 local.db*
 .env
 .env.local
+
+data/dropoff-sites.local.json

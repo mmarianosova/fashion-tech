@@ -18,6 +18,9 @@ npm run preview                   # regenerate preview/index.html (standalone re
 3. `fake` mode needs a long-lived server (it runs the scripted agent in the background), so use it locally, not on Vercel.
 4. Public MCP URL for the Disposition Agent: `https://<your-app>.vercel.app/mcp` (POST JSON-RPC, never redirects; check with `curl -i`).
 
+## Textile drop-off directory
+Run `python3 scripts/import-dropoffs.py /path/to/tri_state_textile_dropoff_sites.csv` from the app folder. The local data is ignored by Git. Open the directory from Approve pickups. It lists drop-off conditions for a person to review. The MCP partner list and automated bookings use a separate dataset.
+
 ## What is tested (all offline, `npm test`)
 Rules match the Python reference on all 32 seed items and the full disposition plan; Intake run with holds (agent call stays unresolved until a person decides); Disposition run with approvals, denial, repeat run (no duplicate alerts); double-alert guard; redelivered events and failed resolves (tool never runs twice); MCP protocol and minimums; cost guard; webhook signature; server orchestration (`startRun`, `snapshot`).
 

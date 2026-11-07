@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState } from 'react';
 import { Ico } from '@/components/icons';
 import { Sheet, Opt, useToast } from '@/components/Sheet';
@@ -60,7 +61,7 @@ export default function Pickups() {
   const fly = (d: Dir) => {
     if (!top || exit) return;
     setExit(d);
-    setTimeout(() => { if (d === 'right') send(top, { allow: true }, 'Booked. Thank you.'); else { setExit(null); setSheet('options'); } }, 220);
+    setTimeout(() => { if (d === 'right') send(top, { allow: true }, 'Approval sent. Waiting for booking confirmation.'); else { setExit(null); setSheet('options'); } }, 220);
   };
 
   return (<>
@@ -90,6 +91,7 @@ export default function Pickups() {
             <button className="alt" style={{ marginTop: 8, minHeight: 44, padding: '8px 16px' }} onClick={() => setDoc(p)}>Open pickup request</button></div></div>))}
       </>)}
       {err && <p className="err">{err}</p>}
+      <div className="foot"><Link href="/dropoffs">Textile drop-off directory</Link></div>
     </main>
     {sheet === 'options' && top && (
       <Sheet title="What should we do?" sub={`${routeName(top.input?.route)} pickup for ${fmtDate(top.input?.deadline)}`} onClose={() => setSheet(null)}>
