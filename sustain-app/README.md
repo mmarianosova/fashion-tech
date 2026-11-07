@@ -97,7 +97,7 @@ scripted agents and fictional inventory. The app sends no real pickup requests.
 ```sh
 npm install
 node scripts/prepare-team-demo.ts
-DATABASE_URL=file:local.db.team-demo ZOO_MODE=fake DEMO_TODAY=2026-11-07 TEXTILE_FLOW_BRIDGE=1 INTAKE_WEB_LOOKUP=0 npm run dev -- --hostname 127.0.0.1 --port 4319
+DATABASE_URL=file:local.db.team-demo ZOO_MODE=fake DEMO_TODAY=2026-11-07 TEXTILE_FLOW_BRIDGE=1 TEXTILE_FLOW_ORIGIN=http://127.0.0.1:4319 INTAKE_WEB_LOOKUP=0 npm run dev -- --hostname 127.0.0.1 --port 4319
 ```
 
 Open http://127.0.0.1:4319/team-preview.html?mode=live&api=http://127.0.0.1:4319&adapter=events.
