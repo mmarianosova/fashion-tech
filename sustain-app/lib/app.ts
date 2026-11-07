@@ -21,6 +21,9 @@ export const env = {
   replyMs: Number(process.env.DEMO_REPLY_MS ?? (process.env.ZOO_MODE === 'real' ? -1 : 6000)),
 };
 
+// Give the recording a brief, observable gap between Intake and the pickup alert.
+const pickupDemoDelay = () => env.mode === 'fake' ? Number(process.env.DEMO_PICKUP_REVIEW_DELAY_MS) || 0 : 0;
+
 const zooAgentId = (kind: string) => kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
 
 type App = { db: Db; zoo: ZooClient; deps: Deps; mcp: McpDeps };
@@ -109,7 +112,7 @@ async function startAgent(a: App, kind: 'intake' | 'disposition',
     const d: Deps = { ...a.deps, zoo: wrapPace(a.zoo) };
     const run = kind === 'intake'
       ? simulateIntake(d, sessionId, batchId, { threshold, wait: pollWait() })
-      : simulateDisposition(d, sessionId, env.today, a.mcp, { wait: pollWait(), overrides });
+      : simulateDisposition(d, sessionId, env.today, a.mcp, { wait: pollWait(), overrides, announceReview: !!opts.handoffToken && pickupDemoDelay() > 0 });
     void run.catch(async (e) => {
       await a.db.run('UPDATE runs SET finished_at=?,status=? WHERE session_id=?', [a.deps.now(), `error: ${e.message}`, sessionId]);
     }).then(retryDispositionHandoff).catch(console.error);
@@ -127,11 +130,13 @@ export async function retryDispositionHandoff() {
   const a = await getApp();
   const now = Date.now();
   const token = randomUUID();
+  const delay = pickupDemoDelay();
   const [claim] = await a.db.all(`UPDATE disposition_handoffs SET claim_token=?, claim_until=?
     WHERE batch_id = (
       SELECT h.batch_id FROM disposition_handoffs h JOIN runs r ON r.session_id=h.intake_session_id
       WHERE h.claim_until <= ? AND NOT EXISTS (SELECT 1 FROM runs WHERE handoff_batch=h.batch_id)
         AND (r.finished_at IS NULL OR r.status='succeeded')
+        AND (? <= 0 OR unixepoch(r.finished_at) * 1000 + ? <= ?)
         AND NOT EXISTS (
           SELECT 1 FROM batch_items b WHERE b.batch_id=h.batch_id AND b.state NOT IN ('tagged','rejected')
             AND NOT (b.state='held' AND EXISTS (
@@ -152,7 +157,7 @@ export async function retryDispositionHandoff() {
     )
     AND NOT EXISTS (SELECT 1 FROM runs WHERE agent='disposition' AND finished_at IS NULL)
     AND NOT EXISTS (SELECT 1 FROM disposition_handoffs WHERE claim_token IS NOT NULL AND claim_until > ?)
-    RETURNING batch_id`, [token, now + 120_000, now, now]);
+    RETURNING batch_id`, [token, now + 120_000, now, delay, delay, now, now]);
   if (!claim) return;
   try {
     await startAgent(a, 'disposition', { batchId: claim.batch_id, handoffToken: token });

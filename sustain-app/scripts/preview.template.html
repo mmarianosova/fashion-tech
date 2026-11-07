@@ -35,8 +35,8 @@ const MAT = {
 const ROUTE_MAT = { donate: 'donate', recycle_shred: 'shred', recycle_denim: 'denim', recycle_mixed: 'mixed', dispose: 'trash' };
 const matKey = (k) => (MAT[k] ? k : 'mixed');
 const tile = (k, size = '') => `<span class="mat m-${matKey(k)} ${size}">${S(MAT[matKey(k)].ic, 1.8)}</span>`;
-const TITLE = { rescheduled: 'Pickup rescheduled', reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Item to review', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
-const TAG = { rescheduled: 'PICKUP', reply: 'REPLY', donate_recycle_due: 'PICKUP', review_waiting: 'REVIEW' };
+const TITLE = { pickup_review_due: 'Pickup to review', rescheduled: 'Pickup rescheduled', reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Item to review', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
+const TAG = { pickup_review_due: 'PICKUP', rescheduled: 'PICKUP', reply: 'REPLY', donate_recycle_due: 'PICKUP', review_waiting: 'REVIEW' };
 const ITEM = Object.fromEntries(FRAMES[0].items.map((i) => [i[0], { garment: i[1], color: i[2] }]));
 const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (d) => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
@@ -175,7 +175,7 @@ function pickups() {
 }
 function messages() {
   const list = alerts(), head = topbar('Messages', 'What is due and what to do.');
-  const ic = (t) => (t === 'reply' ? I.person : (t === 'donate_recycle_due' || t === 'rescheduled') ? I.truck : t === 'review_waiting' ? I.label : I.flag);
+  const ic = (t) => (t === 'reply' ? I.person : (t === 'donate_recycle_due' || t === 'rescheduled' || t === 'pickup_review_due') ? I.truck : t === 'review_waiting' ? I.label : I.flag);
   if (!list.length) return head + `<main class="page">${done(I.bell, 'No messages', 'Updates and replies show up here.')}</main>`;
   return head + `<main class="page">${list.map((a) => `<button class="note tap ${st.seen[a.id] ? '' : 'unread'}" data-act="msgopen" data-arg="${esc(a.id)}"><div class="note-ico">${ic(a.type)}</div><div><h4>${esc(msgTitle(a))}</h4><p class="clamp">${esc(a.summary)}</p><span class="tag">${TAG[a.type] || 'ALERT'}</span></div></button>`).join('')}</main>`;
 }

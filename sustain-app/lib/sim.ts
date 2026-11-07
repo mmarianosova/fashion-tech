@@ -38,7 +38,7 @@ export async function simulateIntake(d: Deps, sid: string, batchId: string, o: {
   await emit(d, sid, { type: 'run.finished', status: 'succeeded' });
 }
 
-export async function simulateDisposition(d: Deps, sid: string, today: string, mcp: McpDeps, o: { wait: Wait; overrides?: Record<string, string> }) {
+export async function simulateDisposition(d: Deps, sid: string, today: string, mcp: McpDeps, o: { wait: Wait; overrides?: Record<string, string>; announceReview?: boolean }) {
   const lid = await call(d, sid, 'list_inventory', { today });
   const inv = await callResult(d.db, lid);
   const rows: InvRow[] = inv.items;
@@ -55,6 +55,13 @@ export async function simulateDisposition(d: Deps, sid: string, today: string, m
     const deadline = later.length ? later.sort().at(-1)! : pk.deadline;
     const input = { partner_id: pk.partner_id, route: pk.route, items: pk.items, lots: pk.lots, deadline };
     await emit(d, sid, { type: 'approval.requested', approval_id, tool: 'mcp__recyclerdirectory__book_pickup', input });
+    if (o.announceReview) {
+      await d.db.run(`INSERT OR IGNORE INTO alerts
+        (alert_id,type,items,deadline,next_step,summary,created_at,ref_kind) VALUES (?,?,?,?,?,?,?,?)`,
+        ['due:' + approval_id, 'pickup_review_due', JSON.stringify(pk.items), deadline,
+          'Open Pickups to review the proposed handover.', `${pk.items.length} items are due to leave the sample library.`,
+          d.now(), 'approval']);
+    }
     await o.wait(async () => (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approval_id]))[0]?.state !== 'pending');
     const st = (await d.db.all('SELECT state FROM approvals WHERE approval_id=?', [approval_id]))[0].state;
     const partner = recyclers.find((r) => r.id === pk.partner_id)!;

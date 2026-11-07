@@ -130,7 +130,7 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
       SELECT ?,?,?,?,?,?,?,?,?
       WHERE (SELECT COUNT(*) FROM inventory WHERE item_key IN (SELECT value FROM json_each(?))
         AND alert_status <> 'sent' AND NOT EXISTS (
-          SELECT 1 FROM alerts a, json_each(a.items) old WHERE a.type NOT IN ('question','reply','rescheduled') AND old.value=inventory.item_key
+          SELECT 1 FROM alerts a, json_each(a.items) old WHERE a.type NOT IN ('question','reply','rescheduled','pickup_review_due') AND old.value=inventory.item_key
             AND (? <> 'donate_recycle_due' OR a.type <> 'review_waiting')
         )) = ?
       AND (? <> 'donate_recycle_due' OR EXISTS (
