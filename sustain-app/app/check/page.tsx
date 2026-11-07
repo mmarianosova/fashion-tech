@@ -12,10 +12,10 @@ type Step = null | 'options' | 'fix' | 'who';
 function Face({ r, item }: { r: any; item?: any }) {
   const t = r.proposed_tags;
   return (<>
-    <div className="sc-head"><span className="sc-key">{r.item_key}</span><span className="chip-gate">{r.sent_to ? `With ${r.sent_to}` : 'Needs a look'}</span></div>
+    <div className="sc-head"><span className="sc-key">{r.item_key}</span><span className="chip-gate">{r.sent_to ? `With ${r.sent_to}` : 'To review'}</span></div>
     {item && <div className="what">{[item.color, item.garment_type].filter(Boolean).join(' ')}</div>}
     <div className="label-box"><div className="k">The label says</div><div className="v">{r.label_text || 'Nothing could be read'}</div></div>
-    <div className="think"><div className="k">The agent thinks</div><div className="big-t">{t ? pileName(t.stream) : 'It is not sure'}</div>
+    <div className="think"><div className="k">Suggested category</div><div className="big-t">{t ? pileName(t.stream) : 'Not sure'}</div>
       <div className="why">{r.reason}</div></div>
     <div className="ask">Is that right?</div>
   </>);
@@ -50,24 +50,24 @@ export default function Check() {
   };
 
   return (<>
-    <Top title="Check labels" />
+    <Top title="Items to review" sub="Labels to review. Swipe right if the suggestion is right, left if not." />
     <main className="page">
       {!snap ? <div className="empty">Loading…</div> : !top ? (
         running
-          ? <div className="done"><div className="tick"><span className="spin" style={{ margin: 0 }} /></div><h2>Still reading labels</h2><p>Your next card appears here as soon as the agent is unsure about one.</p></div>
-          : <div className="done"><div className="tick">{Ico.check}</div><h2>Nothing to check</h2><p>When the agent is unsure about a label, it shows up here.</p></div>
+          ? <div className="done"><div className="tick"><span className="spin" style={{ margin: 0 }} /></div><h2>Checking labels</h2><p>Anything that needs a second look appears here.</p></div>
+          : <div className="done"><div className="tick">{Ico.check}</div><h2>Nothing to review</h2><p>When a label needs a second look, it shows up here.</p></div>
       ) : (<>
-        <div className="count">{plural(queue.length, 'card')} left</div>
+        <div className="count">{plural(queue.length, 'item')} left</div>
         <div className="deck">
           {nxt && <div className="sc next gate"><Face r={nxt} item={itemOf(nxt)} /></div>}
           <SwipeCard key={top.review_id} exit={exit} onDir={fly} canRight={!!top.proposed_tags}><Face r={top} item={itemOf(top)} /></SwipeCard>
         </div>
         <div className="choices three">
-          <button className="btn-no" onClick={() => fly('left')}>{Ico.x}No</button>
+          <button className="btn-no" onClick={() => fly('left')}>{Ico.x}<span className="sr">No</span></button>
           <button className="btn-alt" onClick={() => setStep('fix')}>{Ico.wrench}Change this</button>
-          <button className="btn-yes" disabled={!top.proposed_tags} onClick={() => fly('right')}>{Ico.check}Yes</button>
+          <button className="btn-yes" disabled={!top.proposed_tags} onClick={() => fly('right')}>{Ico.check}<span className="sr">Yes</span></button>
         </div>
-        <p className="hint">Swipe right for yes, left for no.</p>
+        <div className="dots">{queue.slice(0, 5).map((_: any, i: number) => <i key={i} className={i === 0 ? 'on' : ''} />)}</div>
       </>)}
       {err && <p className="err">{err}</p>}
     </main>
@@ -75,7 +75,7 @@ export default function Check() {
     {step === 'options' && top && (
       <Sheet title="Not right. What now?" sub={`${top.item_key}: choose a way forward.`} onClose={() => setStep(null)}>
         <Opt icon={Ico.person} tone="warn" title="Send to someone" help="They decide. It stays here until someone answers." onClick={() => setStep('who')} />
-        <Opt icon={Ico.trash} tone="bad" title="Delete from pile" help="The agent skips this item" onClick={() => send(top, { decision: 'reject' }, 'Deleted from the pile.')} />
+        <Opt icon={Ico.trash} tone="bad" title="Delete from pile" help="It is left out of the batch" onClick={() => send(top, { decision: 'reject' }, 'Deleted from the pile.')} />
       </Sheet>)}
     {step === 'fix' && top && (
       <Sheet title="Which pile is it?" sub={`${top.item_key} — ${top.label_text || 'no label text'}`} onClose={() => setStep(null)}>
