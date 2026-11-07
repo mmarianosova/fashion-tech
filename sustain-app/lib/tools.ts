@@ -105,7 +105,11 @@ export const tools: Record<string, (c: Ctx, input: any) => Promise<any>> = {
 
   async list_inventory(c, i) {
     need(isCalendarDate(i?.today), 'today must be YYYY-MM-DD');
-    const rows = await c.db.all("SELECT * FROM inventory WHERE status <> 'material_tagged' ORDER BY item_key");
+    const rows = await c.db.all(`SELECT i.* FROM inventory i
+      LEFT JOIN runs r ON r.session_id=?
+      WHERE i.status <> 'material_tagged' AND (r.handoff_batch IS NULL OR EXISTS (
+        SELECT 1 FROM batch_items b WHERE b.batch_id=r.handoff_batch AND b.item_key=i.item_key AND b.state='tagged'
+      )) ORDER BY i.item_key`, [c.sessionId]);
     return { today: i.today, items: rows.map((r) => ({
       item_key: r.item_key, category: r.category, tags: { stream: r.stream, fibre_type: r.fibre_type, color_group: r.color_group, condition: r.condition },
       location: r.location, season: r.season, received_date: r.received_date, return_window_close: r.return_window_close,

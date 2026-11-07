@@ -16,11 +16,14 @@ async function boot() {
 }
 const until = async (fn: () => Promise<boolean>, ms = 15000) => { const t = Date.now(); while (!(await fn())) { if (Date.now() - t > ms) throw new Error('timeout'); await new Promise((r) => setTimeout(r, 50)); } };
 
-test('server flow: intake run with UI-style review decisions, then disposition with approvals', async () => {
+test('server flow: Intake waits for review and hands the batch to Disposition once', async () => {
   const { app, bridge, db, deps } = await boot();
   const { sessionId } = await app.startRun('intake', { batchId: 'SEED-1', threshold: 0.8 });
   await assert.rejects(app.startRun('intake', {}), /already active/);
-  // act like the reviewer clicking Approve in the UI while the agent is paused
+  await until(async () => (await db.all("SELECT 1 FROM reviews WHERE state='pending'")).length > 0);
+  await app.retryDispositionHandoff();
+  assert.equal((await db.all("SELECT 1 FROM runs WHERE agent='disposition'")).length, 0);
+  // Act like the reviewer clicking Approve in the UI while the agent is paused.
   await until(async () => {
     for (const r of await db.all("SELECT review_id FROM reviews WHERE state='pending'")) await bridge.resolveReview(deps, r.review_id, 'approve');
     return !!(await db.all('SELECT finished_at FROM runs WHERE session_id=?', [sessionId]))[0].finished_at;
@@ -29,16 +32,21 @@ test('server flow: intake run with UI-style review decisions, then disposition w
   assert.equal(snap.items.filter((i: any) => i.state === 'tagged').length, 32);
   assert.equal(snap.reviews.length, 5);
 
-  const d = await app.startRun('disposition', {});
+  await Promise.all(Array.from({ length: 5 }, () => app.retryDispositionHandoff()));
+  await until(async () => (await db.all("SELECT 1 FROM runs WHERE agent='disposition'")).length > 0);
+  const [d] = await db.all("SELECT session_id FROM runs WHERE agent='disposition'");
+  assert.ok(d, 'the handoff started Disposition');
   await until(async () => {
     for (const a of await db.all("SELECT approval_id FROM approvals WHERE state='pending'")) await bridge.resolveApproval(deps, a.approval_id, true);
-    return !!(await db.all('SELECT finished_at FROM runs WHERE session_id=?', [d.sessionId]))[0].finished_at;
+    return !!(await db.all('SELECT finished_at FROM runs WHERE session_id=?', [d.session_id]))[0].finished_at;
   });
   snap = await app.snapshot();
   assert.equal(snap.pickups.length, 2);
   assert.ok(snap.alerts.length >= 5);
   assert.equal(snap.plan.routes.length, 0); // everything due is now flagged
   assert.ok(snap.events.length > 0);
+  await app.retryDispositionHandoff();
+  assert.equal((await db.all("SELECT 1 FROM runs WHERE agent='disposition'")).length, 1);
 });
 
 test('startRun refuses when the balance is below the floor', async () => {

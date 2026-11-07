@@ -109,11 +109,9 @@ curl -fsS -X POST http://127.0.0.1:4319/api/runs/intake -H 'Content-Type: applic
 
 Open **Labels**. Three complete labels are accepted. For the faded label,
 choose **No** then **Delete from pile** so it does not enter Disposition.
-After Intake finishes, start Disposition:
-
-```sh
-curl -fsS -X POST http://127.0.0.1:4319/api/runs/disposition
-```
+Once Intake finishes and the review is resolved, Disposition starts automatically
+once for the batch if confirmed items have routing data. The terminal is not
+needed for this step.
 
 Open **Pickups** and choose **Book pickup** for the three denim items. Open
 **Messages** to see the handover notice for Blue Cycle Denim (fictional).

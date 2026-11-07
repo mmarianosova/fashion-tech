@@ -23,10 +23,12 @@ END;
 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, cursor TEXT, type TEXT NOT NULL, payload TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(session_id, cursor));
 CREATE TABLE IF NOT EXISTS handled_calls (call_id TEXT PRIMARY KEY, result TEXT NOT NULL, is_error INTEGER NOT NULL DEFAULT 0, resolved INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS runs (session_id TEXT PRIMARY KEY, agent TEXT NOT NULL, ref TEXT, started_at TEXT NOT NULL, finished_at TEXT, status TEXT, summary TEXT, cost_usd REAL);
+CREATE TABLE IF NOT EXISTS disposition_handoffs (batch_id TEXT PRIMARY KEY, intake_session_id TEXT NOT NULL,
+  claim_token TEXT, claim_until INTEGER NOT NULL DEFAULT 0);
 `;
 
 // Columns added after the first release: older databases get them via ALTER TABLE.
-const ADDED: [string, string, string][] = [['pickups', 'session_id', 'TEXT'], ['reviews', 'sent_to', 'TEXT'], ['reviews', 'sent_at', 'TEXT'], ['approvals', 'sent_to', 'TEXT'], ['approvals', 'resched_to', 'TEXT'], ['reviews', 'replied', 'INTEGER NOT NULL DEFAULT 0'], ['approvals', 'sent_at', 'TEXT'], ['approvals', 'replied', 'INTEGER NOT NULL DEFAULT 0'], ['alerts', 'ref_kind', 'TEXT'], ['alerts', 'from_name', 'TEXT']];
+const ADDED: [string, string, string][] = [['pickups', 'session_id', 'TEXT'], ['reviews', 'sent_to', 'TEXT'], ['reviews', 'sent_at', 'TEXT'], ['approvals', 'sent_to', 'TEXT'], ['approvals', 'resched_to', 'TEXT'], ['reviews', 'replied', 'INTEGER NOT NULL DEFAULT 0'], ['approvals', 'sent_at', 'TEXT'], ['approvals', 'replied', 'INTEGER NOT NULL DEFAULT 0'], ['alerts', 'ref_kind', 'TEXT'], ['alerts', 'from_name', 'TEXT'], ['runs', 'handoff_batch', 'TEXT']];
 
 export async function migrate(db: Db) {
   await db.exec(SCHEMA);
@@ -34,6 +36,7 @@ export async function migrate(db: Db) {
     const cols = await db.all(`PRAGMA table_info(${table})`);
     if (!cols.some((c) => c.name === col)) await db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
   }
+  await db.exec('CREATE UNIQUE INDEX IF NOT EXISTS one_disposition_per_handoff ON runs(handoff_batch)');
 }
 
 export async function libsqlDb(url: string, authToken?: string): Promise<Db> {
