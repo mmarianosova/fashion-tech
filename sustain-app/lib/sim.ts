@@ -5,7 +5,7 @@ import type { Db } from './db.ts';
 import { p } from './db.ts';
 import { handleEvent, type Deps } from './bridge.ts';
 import { callTool, type McpDeps } from './mcp.ts';
-import { parseLabelText, plan, shouldHold, tagItem, type InvRow, type Recycler } from './rules.ts';
+import { plan, type InvRow, type Recycler } from './rules.ts';
 
 type Wait = (check: () => Promise<boolean>) => Promise<void>;
 let n = 0;
@@ -22,16 +22,8 @@ export async function simulateIntake(d: Deps, sid: string, batchId: string, o: {
   const gid = await call(d, sid, 'get_batch', { batch_id: batchId });
   const { items } = await callResult(d.db, gid);
   for (const it of items) {
-    const label = parseLabelText(it.label_text);
-    const conflict = /^photo shows/i.test(it.visible_note || '');
-    const tags = tagItem(it.garment_type, label.fibre, it.color, it.condition);
-    const hold = shouldHold(label, conflict);
-    const confidence = conflict ? 0.4 : hold ? 0.6 : 0.95;
-    const reason = conflict ? 'Label and garment disagree: ' + it.visible_note
-      : !label.legible ? 'No readable fibre content on label'
-      : !label.sumOk ? 'Fibre percentages do not add to 100'
-      : `${label.fibre!.map((f) => `${f.pct}% ${f.fibre}`).join(', ')}, so ${tags.stream}`;
-    if (confidence < o.threshold) {
+    const { tags, status, confidence, reason } = it.assessment;
+    if (status === 'needs_review' || confidence < o.threshold) {
       const cid = await call(d, sid, 'hold_for_review', { item_key: it.item_key, reason, proposed_tags: tags, confidence });
       await o.wait(async () => (await d.db.all('SELECT state FROM reviews WHERE call_id=?', [cid]))[0]?.state !== 'pending');
     } else {

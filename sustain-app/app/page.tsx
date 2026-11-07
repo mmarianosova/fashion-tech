@@ -47,7 +47,7 @@ export default function Home() {
           <div className="prog"><i style={{ width: `${(seen / items.length) * 100}%` }} /></div>
           <p>{seen} of {items.length} done. Anything under 0.80 confidence comes to you as a card.</p></>
         : !allSorted ? <>
-          <h3>A new batch arrived</h3><p>{plural(items.length, 'label')} to read. The agent reads and tags each one, and holds only the ones it is unsure of.</p>
+          <h3>A new batch arrived</h3><p>{plural(items.length, 'item')} to classify from label and catalog descriptions.</p>
           <button className="big go" onClick={() => go('/api/runs/intake', { batch_id: snap.batch?.batch_id })}>Start reading labels</button></>
         : dispRun ? <><h3><span className="spin" />Looking for items that are due…</h3><p>Pickups that need your yes will appear on Approve pickups.</p></>
         : <><h3>Due items</h3><p>This runs by itself every day. You can also run it now.</p>

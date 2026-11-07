@@ -17,6 +17,8 @@ export const env = {
   runLimit: Number(process.env.RUN_COST_LIMIT_USD ?? 3),
 };
 
+const zooAgentId = (kind: string) => kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
+
 type App = { db: Db; zoo: ZooClient; deps: Deps; mcp: McpDeps };
 const g = globalThis as any;
 
@@ -29,7 +31,12 @@ async function init(): Promise<App> {
   const dataDir = join(process.cwd(), 'data');
   const db = await libsqlDb(process.env.DATABASE_URL ?? 'file:local.db', process.env.DATABASE_AUTH_TOKEN);
   await seed(db, dataDir);
-  const zoo = env.mode === 'real' ? await realZoo(process.env.ZOOWORK_API_KEY!, process.env.ZOOWORK_BASE_URL) : new FakeZoo();
+  const zoo = env.mode === 'real' ? await realZoo(process.env.ZOOWORK_API_KEY, process.env.ZOOWORK_BASE_URL, async (sessionId) => {
+    const [run] = await db.all('SELECT agent FROM runs WHERE session_id=?', [sessionId]);
+    const agentId = run && zooAgentId(run.agent);
+    if (!agentId) throw new Error('ZooWork agent ID unavailable for this session');
+    return agentId;
+  }) : new FakeZoo();
   const now = () => new Date().toISOString();
   const newId = (prefix: string) => `${prefix}_${randomUUID().slice(0, 8)}`;
   const recyclers = loadRecyclers(dataDir);
@@ -51,9 +58,9 @@ export async function startRun(kind: 'intake' | 'disposition', opts: { batchId?:
   const threshold = opts.threshold ?? 0.8;
   const batchId = opts.batchId ?? 'SEED-1';
   const message = kind === 'intake'
-    ? `Process batch ${batchId} with a confidence threshold of ${threshold}. Tag every item and hold anything you are not sure about. Finish with the summary.`
+    ? `Process batch ${batchId} with a confidence threshold of ${threshold}. Use each item’s assessment from get_batch. Hold needs_review items and anything below the threshold. Finish with the summary.`
     : `Run the daily disposition review. Today is ${env.today}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary.`;
-  const agentId = kind === 'intake' ? process.env.INTAKE_AGENT_ID : process.env.DISPOSITION_AGENT_ID;
+  const agentId = zooAgentId(kind);
   const idem = `${kind}-${a.deps.newId('run')}`;
   const { sessionId } = env.mode === 'real'
     ? await a.zoo.createSession(agentId!, message, idem)
@@ -97,7 +104,10 @@ export async function snapshot() {
   return {
     mode: env.mode, today: env.today, balance: await a.zoo.getBalance().catch(() => null),
     batch, items: await q('SELECT * FROM batch_items WHERE batch_id=? ORDER BY item_key', [batch?.batch_id]),
-    reviews: (await q("SELECT * FROM reviews ORDER BY rowid DESC")).map((r) => ({ ...r, proposed_tags: p(r.proposed_tags), decided_tags: p(r.decided_tags) })),
+    reviews: (await q(`SELECT r.*,a.result AS assessment FROM reviews r LEFT JOIN intake_assessments a
+      ON r.session_id=a.session_id AND r.batch_id=a.batch_id AND r.item_key=a.item_key ORDER BY r.rowid DESC`))
+      .map(({ assessment, ...r }) => ({ ...r, proposed_tags: p(r.proposed_tags), decided_tags: p(r.decided_tags),
+        evidence: p(assessment)?.evidence })),
     approvals: (await q('SELECT * FROM approvals ORDER BY rowid DESC')).map((r) => ({ ...r, input: p(r.input) })),
     pickups: (await q('SELECT * FROM pickups ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items), lots: p(r.lots) })),
     alerts: (await q('SELECT * FROM alerts ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items) })),

@@ -3,7 +3,7 @@
   "intake": [
     {
       "name": "get_batch",
-      "description": "Return the items in an intake batch. Each item has item_key, garment_type, color, category, label_text (may be empty), image_path (a file under /workspace, may be null), visible_note, condition.",
+      "description": "Return the items and text-only assessments for an intake batch. Each assessment contains tags, status, confidence, and reason.",
       "input_schema": {
         "type": "object",
         "properties": {"batch_id": {"type": "string"}},

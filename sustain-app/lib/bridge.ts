@@ -3,9 +3,11 @@
 import type { Db } from './db.ts';
 import { j, p } from './db.ts';
 import type { ZooClient } from './zoo.ts';
-import { PENDING, ToolError, tools } from './tools.ts';
+import { PENDING, ToolError, tools, isTags } from './tools.ts';
 
-export type Deps = { db: Db; zoo: ZooClient; now: () => string; newId: (prefix: string) => string };
+import type { ProductLookup } from './intake.ts';
+
+export type Deps = { lookupProduct?: ProductLookup; db: Db; zoo: ZooClient; now: () => string; newId: (prefix: string) => string };
 
 export type AppEvent = {
   id: string; cursor: string; type: string;
@@ -56,7 +58,7 @@ async function runCustomTool(d: Deps, sessionId: string, ev: AppEvent) {
     try {
       const fn = tools[ev.name!];
       if (!fn) throw new ToolError(`unknown tool ${ev.name}`);
-      result = await fn({ db: d.db, now: d.now, callId, sessionId, newId: d.newId }, ev.input);
+      result = await fn({ db: d.db, now: d.now, callId, sessionId, newId: d.newId, lookupProduct: d.lookupProduct }, ev.input);
       if (result === PENDING) return; // hold_for_review: resolved later by resolveReview
     } catch (e: any) {
       isError = true; result = { error: e instanceof ToolError ? e.message : 'internal_error' };
@@ -75,7 +77,7 @@ export async function resolveReview(d: Deps, reviewId: string, decision: 'approv
   if (r.state !== 'pending') return { already: true, state: r.state };
   const proposed = p(r.proposed_tags);
   const final = decision === 'reject' ? null : (tags ?? proposed);
-  if (decision !== 'reject' && !final) throw new Error('tags required: no proposed tags to approve');
+  if (decision !== 'reject' && !isTags(final)) throw new Error('Complete and valid tags are required. Edit the proposed tags or reject the item.');
   const state = decision === 'approve' ? 'approved' : decision === 'edit' ? 'edited' : 'rejected';
   await d.db.run('UPDATE reviews SET state=?,decided_tags=?,decided_at=? WHERE review_id=?', [state, j(final), d.now(), reviewId]);
   if (final) {
@@ -98,7 +100,7 @@ export async function resolveApproval(d: Deps, approvalId: string, allow: boolea
   const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
   if (!a) throw new Error('unknown approval');
   if (a.state !== 'pending') return { already: true, state: a.state };
-  await d.zoo.resolveApproval(approvalId, allow ? 'allow-once' : 'deny');
+  await d.zoo.resolveApproval(approvalId, allow ? 'allow-once' : 'deny', a.session_id);
   await d.db.run('UPDATE approvals SET state=?,decided_at=? WHERE approval_id=?', [allow ? 'allowed' : 'denied', d.now(), approvalId]);
   return { already: false, state: allow ? 'allowed' : 'denied' };
 }

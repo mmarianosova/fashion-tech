@@ -1,12 +1,12 @@
 {
-  "_note": "Template. Fill model.primary at the smoke test (use list_models, choose a vision-capable model for Intake). Verify key names against the SDK create_agent example. Persona docs: paste agents/intake/AGENTS.md as the AGENTS.md doc. Attach skills after upload with put_agent_skill: label-reading, material-tagging. Create the agent with an idempotency key, serialize createAgent, then start and poll status.desired_state.",
+  "_note": "Template. Fill model.primary at the smoke test (use list_models, choose a text-capable model for Intake). Verify key names against the SDK create_agent example. Persona docs: paste agents/intake/AGENTS.md as the AGENTS.md doc. Attach skills after upload with put_agent_skill: label-reading, material-tagging. Create the agent with an idempotency key, serialize createAgent, then start and poll status.desired_state.",
   "name": "sustain-intake",
   "model": {"primary": "PICK_AT_SMOKE_TEST", "max_tokens": 4096, "thinking": "low"},
   "persona": {"docs": [{"name": "AGENTS.md", "file": "agents/intake/AGENTS.md"}]},
   "include_global_skills": false,
   "sandbox": {"scope": "agent"},
   "tool_policy": {
-    "deny": ["exec", "process", "cron", "apply_patch", "web_search", "web_fetch", "web_image_search", "artifact_publish"]
+    "deny": ["exec", "process", "cron", "apply_patch", "web_search", "web_fetch", "web_image_search", "artifact_publish", "image"]
   },
   "custom_tools": "see agents/custom_tools.json key 'intake'",
   "labels": {"app": "sustain", "role": "intake"}
