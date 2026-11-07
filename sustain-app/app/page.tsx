@@ -4,10 +4,12 @@ import { Ico } from '@/components/icons';
 import { useAppState } from '@/lib/useAppState';
 import { fmtDate, plural, routeName } from '@/lib/plain';
 
+const brand = <span className="brand"><svg aria-hidden="true" width="28" height="28" viewBox="0 0 96 96"><rect width="96" height="96" rx="25" fill="#006BFF"/><path d="M24 31h45 M31 48h31 M38 65h17" fill="none" stroke="#fff" strokeWidth="8" strokeLinecap="round"/></svg>Sortix</span>;
+
 // Home: what is waiting for you, and a short list to browse everything else.
 export default function Home() {
   const { snap } = useAppState();
-  if (!snap) return <div className="hello"><div className="eyebrow"><span className="brand"><span className="logo" />Textile Flow</span></div><h1>Loading…</h1></div>;
+  if (!snap) return <div className="hello"><div className="eyebrow">{brand}</div><h1>Loading…</h1></div>;
 
   const reviews = snap.reviews.filter((r: any) => r.state === 'pending').length;
   const pend = snap.approvals.filter((a: any) => a.state === 'pending');
@@ -22,7 +24,7 @@ export default function Home() {
   const Row = ({ href, ic, t, d }: any) => (<Link href={href}><span className="bi">{ic}</span><span><b>{t}</b><span className="d">{d}</span></span><span className="go">{Ico.chev}</span></Link>);
 
   return (<>
-    <div className="hello"><div className="eyebrow"><span className="brand"><span className="logo" />Textile Flow</span><span className="date">{fmtDate(snap.today)}</span></div>
+    <div className="hello"><div className="eyebrow">{brand}<span className="date">{fmtDate(snap.today)}</span></div>
       <h1>{needs > 0 ? `${plural(needs, 'item')} to review` : 'All caught up'}</h1></div>
     <main className="page">
       <Tile href="/check" ic={Ico.label} t="Labels to review" d={reviews ? 'Fibre content we could not read' : 'Nothing waiting'} n={reviews} />
