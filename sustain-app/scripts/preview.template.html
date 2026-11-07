@@ -1,34 +1,53 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Textile Flow: replay preview</title><meta name="robots" content="noindex">
+<title>Textile Flow: demo</title><meta name="robots" content="noindex">
 <style>/*CSS*/</style></head>
 <body class="demo"><div class="app" id="app"></div>
 <script>
 /*FRAMES*/
-// A recorded run of the real app code (Intake Agent -> held items -> Disposition Agent -> pickup approvals -> alerts), replayed as the phone screens.
-// Whatever is chosen on a card, the recorded story continues the same way: this is a demo, not the live app.
-const S = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-const I = { back: S('<path d="m15 5-7 7 7 7"/>'), check: S('<path d="m5 12.5 4.5 4.5L19 7.5"/>'), x: S('<path d="M6 6l12 12M18 6 6 18"/>'),
-  label: S('<path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8Z"/><circle cx="8.5" cy="8.5" r="1.3"/>'),
-  truck: S('<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>'),
-  bell: S('<path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2 2 0 0 0 4 0"/>'),
-  wrench: S('<path d="M14.5 6.5a4 4 0 0 0 4.9 4.9L21 13l-8 8-3-3 8-8-1.5-1.5ZM5 15l-2 2 4 4 2-2"/>'),
+// Demo mode: a recorded run of the real app code, replayed as the phone screens. The work happens in the background by itself;
+// the person only decides the items that come up. Whatever is chosen, the recorded story continues the same way. Nothing here is real data.
+const S = (d, w = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const I = { back: S('<path d="M15 6l-6 6 6 6"/>'), check: S('<path d="M5 12l5 5L20 7"/>', 2.4), x: S('<path d="M6 6l12 12M18 6 6 18"/>', 2.2),
+  home: S('<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'),
+  label: S('<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>'),
+  truck: S('<path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>'),
+  bell: S('<path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7z"/><path d="M10 20a2 2 0 0 0 4 0"/>'),
+  wrench: S('<path d="M4 20h4L19 9l-4-4L4 16z"/>'),
   person: S('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-4 3.5-6 7-6s6.2 2 7 6"/>'),
-  calendar: S('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>'),
+  calendar: S('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
   trash: S('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'), flag: S('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'),
-  question: S('<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/>') };
+  clock: S('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'), chev: S('<path d="M9 6l6 6-6 6"/>'),
+  pin: S('<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>'),
+  sig: '<svg width="18" height="12" viewBox="0 0 18 12" aria-hidden="true" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>',
+  wifi: '<svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1.5 4.5a9.5 9.5 0 0 1 13 0"/><path d="M4 7.2a6 6 0 0 1 8 0"/><circle cx="8" cy="10" r="1" fill="currentColor"/></svg>',
+  batt: '<svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect x="0.5" y="0.5" width="22" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="19" height="8" rx="2" fill="currentColor"/><rect x="24" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" opacity=".4"/></svg>' };
 const PILE = { shred: ['Shred pile', 'mostly natural fibres, like cotton'], denim: ['Denim pile', 'jeans and denim'], mixed: ['Mixed pile', 'mixed or man-made fabric'], trash: ['Throw away', 'cannot be reused'] };
 const ROUTE = { donate: 'Donation', recycle_shred: 'Fabric shredding', recycle_denim: 'Denim recycling', recycle_mixed: 'Mixed fabric recycling', dispose: 'Disposal' };
-const TITLE = { reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Needs a decision', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
+const TITLE = { reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Item to review', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
+const TAG = { reply: 'REPLY', donate_recycle_due: 'PICKUP', review_waiting: 'REVIEW' };
 const ITEM = Object.fromEntries(FRAMES[0].items.map((i) => [i[0], { garment: i[1], color: i[2] }]));
 const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (d) => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
+const mon = (d) => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase() : '');
+const dom = (d) => (d ? new Date(d + 'T00:00:00Z').getUTCDate() : '');
 const plural = (n, a, b) => `${n} ${n === 1 ? a : (b || a + 's')}`;
 const pile = (s) => (PILE[s] ? PILE[s][0] : 'Not sure');
 const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
-const short = (it = []) => (it.length > 6 ? it.slice(0, 6).join(', ') + ' and ' + (it.length - 6) + ' more' : it.join(', '));
+const ids = (it = []) => it.slice(0, 6).map((x) => `<span>${esc(x)}</span>`).join('') + (it.length > 6 ? `<span>+${it.length - 6} more</span>` : '');
+const garment = (k) => { const it = ITEM[k] || {}; return [it.color, it.garment].filter(Boolean).join(' '); };
 
-const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [] };
+// Demo history: a few earlier decisions so the History screen is not empty. New choices are added on top.
+const REVIEWED = new Set(FRAMES.flatMap((f) => f.reviews.map((r) => r.item)));
+const LAST = FRAMES[FRAMES.length - 1];
+const earlier = LAST.items.filter((i) => !REVIEWED.has(i[0]) && i[5]).slice(0, 2);
+const firstPartner = Object.values(PARTNERS)[0] || {};
+const SEED = [
+  ...earlier.map((i) => ({ k: 'label', title: `${i[0]} ${garment(i[0])}`.trim(), sub: pile(i[5]), status: 'Accepted', tone: 'ok' })),
+  { k: 'pickup', title: 'Fabric shredding', sub: `${firstPartner.name || 'Recycler'} · Hand over by ${fmt(addDays(FRAMES[0].today, 3))}`, status: 'Booked', tone: 'book' },
+];
+
+const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [], hist: [], hf: 'all' };
 const F = () => FRAMES[st.fi];
 const pendRev = () => F().reviews.filter((r) => r.state === 'pending');
 const pendApp = () => F().approvals.filter((a) => a.state === 'pending');
@@ -36,99 +55,114 @@ const alerts = () => [...st.msgs, ...F().alerts];
 const unread = () => alerts().filter((a) => !st.seen[a.id]).length;
 
 function stopPlay() { clearInterval(st.timer); st.timer = null; }
+// The work runs by itself in the background; it stops only where a person has to decide.
 function play() {
   if (st.timer) return;
   st.timer = setInterval(() => {
-    const f = F();
-    if (f.gate || st.fi >= FRAMES.length - 1 || f.phase === 'intake_done' || f.phase === 'disp_done') { stopPlay(); render(); return; }
+    if (F().gate || st.fi >= FRAMES.length - 1) { stopPlay(); render(); return; }
     st.fi++; render();
-    if (F().gate || F().phase === 'intake_done' || F().phase === 'disp_done') stopPlay();
+    if (F().gate || st.fi >= FRAMES.length - 1) stopPlay();
   }, 420);
 }
-// A person decided the current gate: the run moves on.
-function decided(msg) { st.fi = Math.min(st.fi + 1, FRAMES.length - 1); st.exit = null; st.sheet = null; say(msg); play(); render(); }
+// A person decided the current item: the run moves on.
+function decided(msg, rec) { if (rec) st.hist.unshift(rec); st.fi = Math.min(st.fi + 1, FRAMES.length - 1); st.exit = null; st.sheet = null; say(msg); play(); render(); }
 function say(m) { st.toast = m; clearTimeout(say.t); say.t = setTimeout(() => { st.toast = null; render(); }, 2400); }
 
-const topbar = (title) => `<header class="top"><button class="back" data-act="home">${I.back}Home</button><h1>${esc(title)}</h1></header>`;
+const topbar = (title, sub) => `<header class="top"><button class="back" data-act="home" aria-label="Back to Home">${I.back}</button><div><h1>${esc(title)}</h1>${sub ? `<p class="lede">${esc(sub)}</p>` : ''}</div></header>`;
 const done = (ic, h, p) => `<div class="done"><div class="tick">${ic}</div><h2>${h}</h2><p>${p}</p></div>`;
 const sheet = (title, sub, body, back) => `<div class="sheet-bg" data-act="closesheet"><div class="sheet" data-stop="1"><h3>${esc(title)}</h3>${sub ? `<p class="s">${esc(sub)}</p>` : ''}${body}<button class="cancel" data-act="${back || 'closesheet'}">Go back</button></div></div>`;
 const opt = (ic, t, d, act, tone = '', arg = '') => `<button class="opt ${tone}" data-act="${act}" data-arg="${esc(arg)}"><span class="ic">${ic}</span><span><b>${esc(t)}</b>${d ? `<span class="d">${esc(d)}</span>` : ''}</span></button>`;
-const choices = (no, yes) => `<div class="choices"><button class="btn-no" data-act="no">${I.x}${no}</button><button class="btn-yes" data-act="yes">${I.check}${yes}</button></div>`;
-
-function home() {
-  const f = F(), rv = pendRev().length, ap = pendApp().length, un = unread(), needs = rv + ap;
-  const seen = f.items.filter((i) => i[4] !== 'pending').length;
-  let start;
-  if (st.timer && f.phase === 'intake') start = `<h3><span class="spin"></span>Reading your labels…</h3><div class="prog"><i style="width:${(seen / f.items.length) * 100}%"></i></div><p>${seen} of ${f.items.length} done. Anything under 0.80 confidence comes to you as a card.</p>`;
-  else if (f.phase === 'start') start = `<h3>A new batch arrived</h3><p>${plural(f.items.length, 'label')} to read. The agent reads and tags each one, and holds only the ones it is unsure of.</p><button class="big go" data-act="startintake">Start reading labels</button>`;
-  else if (f.phase === 'intake' && !f.gate) start = `<h3>Reading paused</h3><p>Tap the yellow bar when it appears.</p>`;
-  else if (f.phase === 'intake') start = `<h3>Waiting for you</h3><p>The agent has paused on a label. It will carry on as soon as you decide.</p>`;
-  else if (f.phase === 'intake_done') start = `<h3>Due items</h3><p>This runs by itself every day. You can also run it now.</p><button class="big go" data-act="startdisp">Run now</button>`;
-  else if (f.phase === 'disp' && st.timer) start = `<h3><span class="spin"></span>Looking for items that are due…</h3><p>Pickups that need your yes will appear on Approve pickups.</p>`;
-  else if (f.phase === 'disp') start = `<h3>Waiting for you</h3><p>The agent has paused on a pickup. It will carry on as soon as you decide.</p>`;
-  else start = `<h3>Today’s review is done ✓</h3><p>${plural(f.pickups.length, 'pickup')} booked. It runs again by itself tomorrow.</p>`;
-  const banner = needs > 0 ? `<button class="need" data-act="${rv ? 'check' : 'pickups'}">${I.bell}<span>${plural(needs, 'thing')} need${needs === 1 ? 's' : ''} you<small>Tap to start</small></span></button>`
-    : `<div class="need ok">${I.check}<span>You are all caught up<small>Nothing is waiting for you</small></span></div>`;
-  const tile = (cls, act, ic, t, d, n) => `<button class="tile ${cls}" data-act="${act}"><span class="ic">${ic}</span><span><b>${t}</b><span class="d">${d}</span></span><span class="n ${n ? '' : 'zero'}">${n}</span></button>`;
-  return `<div class="hello"><div class="eyebrow">Textile Flow · ${esc(f.today)}</div><h1>What would you like to do?</h1></div><main class="page">${banner}
-    ${tile('', 'check', I.label, 'Check labels', 'Confirm what the agent could not be sure of', rv)}
-    ${tile('t2', 'pickups', I.truck, 'Approve pickups', 'Say yes before a recycler is booked', ap)}
-    ${tile('t3', 'messages', I.bell, 'Messages', 'Alerts about what is due and what to do', un)}
-    <section class="start">${start}</section></main>`;
-}
-
-function reviewFace(r, withChip) {
-  const it = ITEM[r.item] || {}, who = st.sent[r.id];
-  return `<div class="sc-head"><span class="sc-key">${esc(r.item)}</span><span class="chip-gate">${who ? 'With ' + esc(who) : 'Needs a look'}</span></div>
-    <div class="what">${esc([it.color, it.garment].filter(Boolean).join(' '))}</div>
-    <div class="label-box"><div class="k">The label says</div><div class="v">${esc(r.label || 'Nothing could be read')}</div></div>
-    <div class="think"><div class="k">The agent thinks</div><div class="big-t">${r.proposed ? pile(r.proposed.stream) : 'It is not sure'}</div><div class="why">${esc(r.reason)}</div></div><div class="ask">Is that right?</div>`;
-}
-function approvalFace(a) {
-  const i = a.input || {}, p = PARTNERS[i.partner_id] || {}, who = st.sent[a.id];
-  return `<div class="sc-head"><span class="sc-key">${esc(ROUTE[i.route] || i.route)}</span><span class="chip-gate">${who ? 'With ' + esc(who) : 'Needs a yes'}</span></div>
-    <div class="think"><div class="k">Who collects</div><div class="big-t" style="font-size:1.3rem">${esc(p.name || i.partner_id)}</div><div class="why">${esc(p.address || '')}</div></div>
-    <div class="row" style="justify-content:space-between"><div><div class="k">Hand over by</div><div class="dl">${fmt(i.deadline)}</div></div><div style="text-align:right"><div class="k">Items</div><div class="dl" style="color:var(--ink)">${(i.items || []).length}</div></div></div>
-    <div class="items-line">${esc(short(i.items))}</div><div class="ask">Book this pickup?</div>`;
-}
 // queue: items already sent to someone stay in the queue, behind the ones nobody has looked at
 const queue = (list) => [...list].sort((a, b) => Number(!!st.sent[a.id]) - Number(!!st.sent[b.id]));
 
+function tabbar() {
+  const t = (act, ic, label, on, pip) => `<a href="#" role="button" data-act="${act}" aria-label="${label}"${on ? ' aria-current="page"' : ''} class="${on ? 'on' : ''}">${ic}${on ? label : ''}${pip && !on ? '<i class="pip"></i>' : ''}</a>`;
+  return `<nav class="tabbar" aria-label="Main">${t('home', I.home, 'Home', st.screen === 'home')}${t('check', I.label, 'Labels', st.screen === 'check', pendRev().length)}${t('pickups', I.truck, 'Pickups', st.screen === 'pickups', pendApp().length)}${t('messages', I.bell, 'Messages', st.screen === 'messages', unread())}</nav>`;
+}
+const brow = (act, ic, t, d) => `<button data-act="${act}"><span class="bi">${ic}</span><span><b>${t}</b><span class="d">${d}</span></span><span class="go">${I.chev}</span></button>`;
+
+function home() {
+  const f = F(), rv = pendRev().length, ap = pendApp().length, un = unread(), needs = rv + ap;
+  const nextAp = queue(pendApp())[0], pi = nextAp && nextAp.input ? nextAp.input : null;
+  const tile = (act, ic, t, d, n) => `<button class="tile" data-act="${act}"><span class="ic">${ic}</span><span><b>${t}</b><span class="d">${esc(d)}</span></span><span class="n ${n ? '' : 'zero'}">${n}</span></button>`;
+  const nPick = f.pickups.length + ap;
+  const cta = needs > 0 ? `<button class="big" data-act="${rv ? 'check' : 'pickups'}">Start reviewing</button>`
+    : `<div class="need ok">${I.check}<span>You are all caught up<small>Nothing is waiting for you</small></span></div>`;
+  return `<div class="hello"><div class="eyebrow"><span class="brand"><span class="logo"></span>Textile Flow</span><span class="date">${esc(fmt(f.today))}</span></div>
+    <h1>${needs > 0 ? plural(needs, 'item') + ' to review' : 'All caught up'}</h1></div><main class="page">
+    ${tile('check', I.label, 'Labels to review', rv ? 'Fibre content we could not read' : 'Nothing waiting', rv)}
+    ${tile('pickups', I.truck, 'Pickups to review', pi ? `${ROUTE[pi.route] || pi.route}, ${(PARTNERS[pi.partner_id] || {}).name || ''}` : 'Nothing waiting', ap)}
+    ${cta}
+    <div class="sect">Browse</div><div class="browse">
+    ${brow('check', I.label, 'All labels', `${f.items.length} in today’s batch`)}
+    ${brow('pickups', I.truck, 'All pickups', nPick ? plural(nPick, 'pickup') : 'None yet')}
+    ${brow('messages', I.bell, 'Messages', un ? plural(un, 'new alert') : 'No new alerts')}
+    ${brow('history', I.clock, 'History', 'Past decisions you can change')}</div></main>`;
+}
+
+function reviewFace(r) {
+  const who = st.sent[r.id];
+  return `<div class="sc-head"><span class="sc-key">${esc(r.item)}</span><span class="chip-gate">${who ? 'With ' + esc(who) : 'To review'}</span></div>
+    <div class="what">${esc(garment(r.item))}</div>
+    <div class="label-box"><div class="k">The label says</div><div class="v">${esc(r.label || 'Nothing could be read')}</div></div>
+    <div class="think"><div class="k">Suggested category</div><div class="big-t">${r.proposed ? pile(r.proposed.stream) : 'Not sure'}</div><div class="why">${esc(r.reason)}</div></div><div class="ask">Is that right?</div>`;
+}
 function check() {
   const q = queue(pendRev()), t = q[0], n = q[1];
-  if (!t) return topbar('Check labels') + `<main class="page">${st.timer && F().phase === 'intake' ? done('<span class="spin" style="margin:0"></span>', 'Still reading labels', 'Your next card appears here as soon as the agent is unsure about one.') : done(I.check, 'Nothing to check', 'When the agent is unsure about a label, it shows up here.')}</main>`;
-  return topbar('Check labels') + `<main class="page"><div class="count">${plural(q.length, 'card')} left</div><div class="deck">
+  const head = topbar('Items to review', 'Labels to review. Swipe right if the suggestion is right, left if not.');
+  if (!t) return head + `<main class="page">${st.timer ? done('<span class="spin"></span>', 'Checking labels', 'Anything that needs a second look appears here.') : done(I.check, 'Nothing to review', 'When a label needs a second look, it shows up here.')}</main>`;
+  const dots = Array.from({ length: Math.min(q.length, 5) }, (_, i) => `<i class="${i === 0 ? 'on' : ''}"></i>`).join('');
+  return head + `<main class="page"><div class="count">${plural(q.length, 'item')} left</div><div class="deck">
     ${n ? `<div class="sc next gate">${reviewFace(n)}</div>` : ''}<div class="sc gate top-card" id="card" style="${st.exit ? `transform:translateX(${st.exit === 'right' ? 560 : -560}px) rotate(${st.exit === 'right' ? 20 : -20}deg);transition:transform .22s` : ''}">
     <span class="stamp yes">YES</span><span class="stamp no">NO</span>${reviewFace(t)}</div></div>
-    <div class="choices three"><button class="btn-no" data-act="no">${I.x}No</button><button class="btn-alt" data-act="rev-fix">${I.wrench}Change this</button><button class="btn-yes" data-act="yes">${I.check}Yes</button></div><p class="hint">Swipe right for yes, left for no.</p></main>`;
+    <div class="choices three"><button class="btn-no" data-act="no">${I.x}<span class="sr">No</span></button><button class="btn-alt" data-act="rev-fix">${I.wrench}Change this</button><button class="btn-yes" data-act="yes">${I.check}<span class="sr">Yes</span></button></div><div class="dots">${dots}</div></main>`;
 }
 function pickups() {
-  const q = queue(pendApp()), t = q[0], n = q[1], booked = F().pickups;
-  if (!t && st.timer && F().phase === 'disp') return topbar('Approve pickups') + `<main class="page">${done('<span class="spin" style="margin:0"></span>', 'Looking for items that are due', 'Pickup proposals appear here for your yes.')}</main>`;
-  if (!t && !booked.length) return topbar('Approve pickups') + `<main class="page">${done(I.check, 'Nothing to approve', 'When the agent finds items that are due, its pickup proposals show up here.')}</main>`;
-  if (!t) return topbar('Approve pickups') + `<main class="page"><div class="count">${plural(booked.length, 'pickup')} booked</div>${booked.map((p) => `<div class="note"><div class="note-ico n-ok">${I.truck}</div><div><h4>${ROUTE[p.route] || p.route}</h4><p>${esc((PARTNERS[p.partner] || {}).name)}</p><p class="nx">Hand over by ${fmt(p.deadline)} · ${plural(p.n, 'item')}</p><button class="alt" style="margin-top:8px;min-height:44px;padding:8px 16px" data-act="doc" data-arg="${esc(p.id)}">Open pickup request</button></div></div>`).join('')}</main>`;
-  return topbar('Approve pickups') + `<main class="page"><div class="count">${plural(q.length, 'pickup')} left</div><div class="deck" style="height:400px">
-    ${n ? `<div class="sc next gate">${approvalFace(n)}</div>` : ''}<div class="sc gate top-card" id="card" style="${st.exit ? `transform:translateX(${st.exit === 'right' ? 560 : -560}px) rotate(${st.exit === 'right' ? 20 : -20}deg);transition:transform .22s` : ''}">
-    <span class="stamp yes">YES</span><span class="stamp no">NOT YET</span>${approvalFace(t)}</div></div><div class="choices three"><button class="btn-no" data-act="app-deny">${I.x}Do not book</button><button class="btn-alt" data-act="app-date">${I.calendar}Reschedule</button><button class="btn-yes" data-act="yes">${I.check}Yes, book it</button></div><p class="hint">“Do not book” is not final: the items come back on the next run. Swipe right to book, left for more choices.</p></main>`;
+  const q = queue(pendApp()), t = q[0], n = q[1], booked = F().pickups, head = topbar('Pickups to review', 'Confirm each pickup before the recycler is booked.');
+  if (!t && st.timer) return head + `<main class="page">${done('<span class="spin"></span>', 'Looking for items that are due', 'Pickups to review appear here.')}</main>`;
+  if (!t && !booked.length) return head + `<main class="page">${done(I.check, 'Nothing to review', 'When items are due to leave, their pickups show up here.')}</main>`;
+  if (!t) return head + `<main class="page"><div class="count">${plural(booked.length, 'pickup')} booked</div>${booked.map((p) => `<div class="note"><div class="note-ico n-ok">${I.truck}</div><div><h4>${ROUTE[p.route] || p.route}</h4><p>${esc((PARTNERS[p.partner] || {}).name)}</p><p class="nx">Hand over by ${fmt(p.deadline)} · ${plural(p.n, 'item')}</p><button class="alt" style="margin-top:8px;min-height:44px;padding:8px 16px" data-act="doc" data-arg="${esc(p.id)}">Open pickup request</button></div></div>`).join('')}</main>`;
+  const i = t.input || {}, p = PARTNERS[i.partner_id] || {}, who = st.sent[t.id], ni = n && n.input ? n.input : null;
+  return head + `<main class="page"><div class="pick">
+    <div class="head"><b>${esc(ROUTE[i.route] || i.route)}</b><span class="chip-gate" style="margin-left:0">${who ? 'With ' + esc(who) : 'To review'}</span></div>
+    <div class="when"><div class="cal"><span>${mon(i.deadline)}</span><strong>${dom(i.deadline)}</strong></div><div><div class="k">Hand over by</div><div class="who">${esc(p.name || i.partner_id)}</div><div class="addr">${I.pin}${esc(p.address || '')}</div></div></div>
+    <div><div class="k" style="margin-bottom:6px">Items ${(i.items || []).length}</div><div class="ids">${ids(i.items)}</div></div>
+    <div class="actions"><button class="btn-yes" data-act="yes">Book pickup</button>
+    <div class="duo"><button class="btn-alt" data-act="app-date">Reschedule</button><button class="btn-no" data-act="app-deny">Don’t book</button></div>
+    <button class="link" data-act="app-options">More options</button></div></div>
+    ${ni ? `<div class="upnext"><span style="flex:1"><span class="k">Up next</span><b>${esc(ROUTE[ni.route] || ni.route)} · ${plural((ni.items || []).length, 'item')}</b><small>${esc((PARTNERS[ni.partner_id] || {}).name || '')}</small></span><span style="color:var(--mute);display:flex">${I.chev}</span></div>` : ''}</main>`;
 }
 function messages() {
-  const list = alerts();
-  const ic = (t) => (t === 'reply' ? [I.person, 'n-ask'] : t === 'donate_recycle_due' ? [I.truck, 'n-ok'] : [I.flag, 'n-warn']);
-  if (!list.length) return topbar('Messages') + `<main class="page">${done(I.bell, 'No messages', 'Updates and replies show up here.')}</main>`;
-  return topbar('Messages') + `<main class="page">${list.map((a) => { const [i, tone] = ic(a.type);
-    return `<button class="note tap ${st.seen[a.id] ? '' : 'unread'}" data-act="msgopen" data-arg="${esc(a.id)}"><div class="note-ico ${tone}">${i}</div><div><h4>${esc(msgTitle(a))}</h4><p class="clamp">${esc(a.summary)}</p></div></button>`; }).join('')}</main>`;
+  const list = alerts(), head = topbar('Messages', 'What is due and what to do.');
+  const ic = (t) => (t === 'reply' ? I.person : t === 'donate_recycle_due' ? I.truck : t === 'review_waiting' ? I.label : I.flag);
+  if (!list.length) return head + `<main class="page">${done(I.bell, 'No messages', 'Updates and replies show up here.')}</main>`;
+  return head + `<main class="page">${list.map((a) => `<button class="note tap ${st.seen[a.id] ? '' : 'unread'}" data-act="msgopen" data-arg="${esc(a.id)}"><div class="note-ico">${ic(a.type)}</div><div><h4>${esc(msgTitle(a))}</h4><p class="clamp">${esc(a.summary)}</p><span class="tag">${TAG[a.type] || 'ALERT'}</span></div></button>`).join('')}</main>`;
 }
 const msgTitle = (a) => (a.type === 'reply' && a.from ? a.from + ' replied' : TITLE[a.type] || 'Message');
-const msgTarget = (a) => (a.ref === 'review' ? ['check', 'Go to Check labels'] : a.ref === 'approval' ? ['pickups', 'Go to Approve pickups'] : a.type === 'review_waiting' || a.type === 'donate_recycle_due' ? ['pickups', 'Go to Approve pickups'] : null);
+const msgTarget = (a) => (a.ref === 'review' ? ['check', 'Go to Items to review'] : a.ref === 'approval' ? ['pickups', 'Go to Pickups to review'] : a.type === 'review_waiting' ? ['check', 'Go to Items to review'] : a.type === 'donate_recycle_due' ? ['pickups', 'Go to Pickups'] : null);
+
+function history() {
+  const seenAlerts = alerts().filter((a) => st.seen[a.id]).map((a) => ({ k: 'alert', id: a.id, title: msgTitle(a), sub: a.summary, status: 'Seen', tone: 'seen' }));
+  const all = [...st.hist, ...SEED];
+  const labels = all.filter((h) => h.k === 'label'), picks = all.filter((h) => h.k === 'pickup'), f = st.hf;
+  const row = (h, ic, act, word) => `<div class="hrow"><span class="ic">${ic}</span><span class="t"><b>${esc(h.title)}</b><span class="st st-${h.tone}">${esc(h.status)}</span><small>${esc(h.sub)}</small></span><button class="chg" data-act="${act}" data-arg="${esc(h.id || '')}">${word}</button></div>`;
+  const grp = (title, rows) => `<div class="hgroup"><div class="sect">${title}</div><div class="hlist">${rows}</div></div>`;
+  const chip = (k, t) => `<button class="${f === k ? 'on' : ''}" data-act="hf" data-arg="${k}">${t}</button>`;
+  return topbar('History', 'Everything you have decided. Tap Change to look at it again.') + `<main class="page"><div class="chips">${chip('all', 'All')}${chip('labels', 'Labels')}${chip('pickups', 'Pickups')}${chip('alerts', 'Alerts')}</div>
+    ${f === 'all' || f === 'labels' ? grp('Label decisions', labels.map((h) => row(h, I.label, 'check', 'Change')).join('')) : ''}
+    ${f === 'all' || f === 'pickups' ? grp('Pickups', picks.map((h) => row(h, I.truck, 'pickups', 'Change')).join('')) : ''}
+    ${f === 'all' || f === 'alerts' ? grp('Alerts seen', seenAlerts.length ? seenAlerts.map((h) => row(h, I.bell, 'msgopen', 'Open')).join('') : `<div class="hrow"><span class="t"><small>No alerts seen yet.</small></span></div>`) : ''}</main>`;
+}
+
 function sheets() {
   const rv = queue(pendRev())[0], ap = queue(pendApp())[0], who = (act) => PEOPLE.map((p) => opt(I.person, p, '', act, '', p)).join('');
   if (st.sheet === 'msg' && st.open) { const m = alerts().find((x) => x.id === st.open), t = m && msgTarget(m); if (m) return sheet(msgTitle(m), (m.items || []).join(', '), `<p class="msg-body">${esc(m.summary)}</p>${m.deadline ? `<p class="msg-body nx">By ${fmt(m.deadline)}</p>` : ''}${m.next ? `<p class="msg-body nx">${esc(m.next)}</p>` : ''}${t ? `<button class="big-link" data-act="${t[0]}">${t[1]}</button>` : ''}`); }
-  if (st.sheet === 'rev-options' && rv) return sheet('Not right. What now?', rv.item + ': choose a way forward.', opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'rev-who', 'warn') + opt(I.trash, 'Delete from pile', 'The agent skips this item', 'rev-remove', 'bad'));
+  if (st.sheet === 'rev-options' && rv) return sheet('Not right. What now?', rv.item + ': choose a way forward.', opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'rev-who', 'warn') + opt(I.trash, 'Delete from pile', 'It is left out of the batch', 'rev-remove', 'bad'));
   if (st.sheet === 'rev-fix' && rv) return sheet('Which pile is it?', rv.item + ' — ' + (rv.label || 'no label text'), Object.entries(PILE).map(([k, v]) => opt(I.label, v[0], v[1], 'rev-pile', k === 'trash' ? 'bad' : '', v[0])).join(''));
-  if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the queue until they answer.', who('rev-send'), 'rev-options');
-  if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Do not book it', 'The agent is told no. The items come back on the next run.', 'app-deny', 'bad'));
-  if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The agent is told, and proposes it again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
-  if (st.sheet === 'app-who' && ap) return sheet('Who should decide?', 'The booking stays in the queue until they answer.', who('app-send'), 'app-options');
+  if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the list until they answer.', who('rev-send'), 'rev-options');
+  if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Don’t book it', 'The items come back on the next run.', 'app-deny', 'bad'));
+  if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The pickup is proposed again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
+  if (st.sheet === 'app-who' && ap) return sheet('Who should decide?', 'The booking stays in the list until they answer.', who('app-send'), 'app-options');
   if (st.sheet === 'doc') { const p = F().pickups.find((x) => x.id === st.doc) || {}, pt = PARTNERS[p.partner] || {};
     return sheet('Pickup request', '', `<div class="reqdoc"><h4>Pickup request ${esc(p.id)}</h4><p><b>Collector:</b> ${esc(pt.name)}, ${esc(pt.address)}</p><p><b>Type:</b> ${ROUTE[p.route] || ''}</p><p><b>Hand over by:</b> ${fmt(p.deadline)}</p><p><b>Items (${p.n}):</b> ${esc((p.items || []).join(', '))}</p>${p.lots && Object.keys(p.lots).length ? `<p><b>Colour lots:</b> ${Object.entries(p.lots).map(([g, v]) => g + ' ' + v.length).join(', ')}</p>` : ''}</div>`); }
   return '';
@@ -136,36 +170,41 @@ function sheets() {
 
 function render() {
   if (st.dragging) return;
-  const strip = `<div class="demo-strip">Demo: a recorded run. Whatever you choose, the story continues the same way.<button data-act="restart">Restart</button></div>`;
-  const body = st.screen === 'check' ? check() : st.screen === 'pickups' ? pickups() : st.screen === 'messages' ? messages() : home();
-  document.getElementById('app').innerHTML = strip + `<div class="scroll">${body}</div>` + sheets() + (st.toast ? `<div class="toast" role="status">${esc(st.toast)}</div>` : '');
+  const strip = `<div class="demo-strip">Demo with sample data. Whatever you choose, the story continues the same way.<button data-act="restart">Restart</button></div>`;
+  const sbar = `<div class="sbar" aria-hidden="true">9:41<span>${I.sig}${I.wifi}${I.batt}</span></div>`;
+  const body = st.screen === 'check' ? check() : st.screen === 'pickups' ? pickups() : st.screen === 'messages' ? messages() : st.screen === 'history' ? history() : home();
+  document.getElementById('app').innerHTML = sbar + strip + `<div class="scroll">${body}</div>` + tabbar() + sheets() + (st.toast ? `<div class="toast" role="status">${esc(st.toast)}</div>` : '');
   bindSwipe();
 }
 
 function act(a, arg) {
   const rv = queue(pendRev())[0], ap = queue(pendApp())[0];
-  const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages' };
-  if (go[a]) { st.screen = go[a]; st.sheet = null; render(); return; }
+  const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages', history: 'history' };
+  if (go[a]) { st.screen = go[a]; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; return; }
+  const pickRec = (status, tone, sub) => { const i = ap.input || {}; return { k: 'pickup', title: ROUTE[i.route] || i.route, sub: sub || `${(PARTNERS[i.partner_id] || {}).name || ''} · ${plural((i.items || []).length, 'item')} · ${fmt(i.deadline)}`, status, tone }; };
+  const labRec = (status, tone, sub) => ({ k: 'label', title: `${rv.item} ${garment(rv.item)}`.trim(), sub, status, tone });
   switch (a) {
-    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null }); st.rt.forEach(clearTimeout); st.rt = []; render(); break;
-    case 'startintake': play(); render(); break;
-    case 'startdisp': st.fi++; play(); render(); break; // step off the 'intake finished' frame, then the Disposition run plays
+    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null, hist: [], hf: 'all' }); st.rt.forEach(clearTimeout); st.rt = []; render(); play(); break;
+    case 'hf': st.hf = arg; render(); break;
     case 'closesheet': st.sheet = null; render(); break;
     case 'msgopen': st.seen[arg] = 1; st.open = arg; st.sheet = 'msg'; render(); break;
     case 'doc': st.doc = arg; st.sheet = 'doc'; render(); break;
-    case 'yes': if (st.screen === 'check' && rv && rv.proposed) fly('right', () => decided('Saved. Thank you.')); else if (st.screen === 'pickups' && ap) fly('right', () => decided('Booked. Thank you.')); break;
-    case 'no': fly('left', () => { st.exit = null; st.sheet = st.screen === 'check' ? 'rev-options' : 'app-options'; render(); }); break;
+    case 'yes':
+      if (st.screen === 'check' && rv && rv.proposed) fly('right', () => decided('Saved. Thank you.', labRec('Accepted', 'ok', pile(rv.proposed.stream))));
+      else if (st.screen === 'pickups' && ap) decided('Booked. Thank you.', pickRec('Booked', 'book'));
+      break;
+    case 'no': fly('left', () => { st.exit = null; st.sheet = 'rev-options'; render(); }); break;
     case 'rev-fix': case 'rev-who': case 'rev-options': case 'app-who': case 'app-options': case 'app-date': st.sheet = a; render(); break;
-    case 'rev-pile': decided('Saved as ' + arg.toLowerCase() + '.'); break;
-    case 'rev-remove': decided('Taken out of the batch.'); break;
-    case 'app-deny': decided('Not booked. It can come back on the next run.'); break;
-    case 'app-resched': decided('Moved to ' + arg + '.'); break;
+    case 'rev-pile': decided('Saved as ' + arg.toLowerCase() + '.', labRec('Changed', 'book', arg)); break;
+    case 'rev-remove': decided('Taken out of the batch.', labRec('Removed', 'no', 'Taken out of the batch')); break;
+    case 'app-deny': decided('Not booked. It can come back on the next run.', pickRec('Not booked', 'no')); break;
+    case 'app-resched': decided('Moved to ' + arg + '.', pickRec('Rescheduled', 'book', `${(PARTNERS[ap.input.partner_id] || {}).name || ''} · New date ${arg}`)); break;
     case 'rev-send': case 'app-send': { const t = a === 'rev-send' ? rv : ap; st.sent[t.id] = arg; st.sheet = null;
       // The manager does not see his own outgoing message. A made-up reply (demo) arrives a few seconds later.
       const kind = a === 'rev-send' ? 'review' : 'approval', mid = 'reply-' + t.id + arg;
       st.rt.push(setTimeout(() => { if (st.msgs.some((m) => m.id === mid)) return; st.msgs.unshift({ id: mid, type: 'reply', from: arg, ref: kind, items: kind === 'review' ? [t.item] : (t.input.items || []),
         summary: kind === 'review' ? 'I took another look at ' + t.item + '. The label is hard to read, so I am not sure the tags are right. Can you check it once more and decide? (Demo reply)' : 'I looked at this pickup. The recycler can come, but the date is tight. Please check it and decide. (Demo reply)',
-        next: kind === 'review' ? 'Open it in Check labels and answer Yes, No or Change this.' : 'Open it in Approve pickups and choose Book it, Reschedule or Do not book.' }); say('New message from ' + arg + '.'); render(); }, 6000));
+        next: kind === 'review' ? 'Open it in Items to review and answer Yes, No or Change this.' : 'Open it in Pickups to review and choose Book pickup, Reschedule or Don’t book.' }); say('New message from ' + arg + '.'); render(); }, 6000));
       say('Sent to ' + arg + '.'); render(); break; }
   }
 }
@@ -173,7 +212,7 @@ function fly(dir, then) { st.exit = dir; render(); setTimeout(then, 230); }
 
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-stop]') && !e.target.closest('[data-act]')) return;
-  const el = e.target.closest('[data-act]'); if (el) act(el.dataset.act, el.dataset.arg);
+  const el = e.target.closest('[data-act]'); if (el) { e.preventDefault(); act(el.dataset.act, el.dataset.arg); }
 });
 function bindSwipe() {
   const c = document.getElementById('card'); if (!c || st.exit) return;
@@ -186,4 +225,5 @@ function bindSwipe() {
   c.onpointercancel = () => { x0 = null; st.dragging = false; };
 }
 render();
+play();
 </script></body></html>

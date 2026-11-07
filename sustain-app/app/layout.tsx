@@ -1,6 +1,8 @@
 import './globals.css';
-export const metadata = { title: 'Textile Flow', description: 'Check clothing labels, sort garments, and approve pickups' };
+import '@/components/icons';
+import TabBar from '@/components/TabBar';
+export const metadata = { title: 'Textile Flow', description: 'Review labels and pickups for your textile batch' };
 export const viewport = { width: 'device-width', initialScale: 1 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (<html lang="en"><body><div className="app">{children}</div></body></html>);
+  return (<html lang="en"><head><link rel="preconnect" href="https://fonts.googleapis.com" /></head><body><div className="app"><div className="scroll">{children}</div><TabBar /></div></body></html>);
 }

@@ -19,7 +19,7 @@ export function SwipeCard({ children, exit, onDir, canRight = true, gate = true 
       onPointerUp={() => { if (x0 === null) return; const d = dx; setX0(null); setDx(0); if (d > 90 && canRight) onDir('right'); else if (d < -90) onDir('left'); }}
       onPointerCancel={() => { setX0(null); setDx(0); }}>
       <span className="stamp yes" style={{ opacity: yes }}>YES</span>
-      <span className="stamp no" style={{ opacity: no }}>NOT RIGHT</span>
+      <span className="stamp no" style={{ opacity: no }}>NO</span>
       {children}
     </div>);
 }
