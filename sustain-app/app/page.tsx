@@ -1,62 +1,43 @@
 'use client';
 import Link from 'next/link';
-import { useState } from 'react';
 import { Ico } from '@/components/icons';
-import { post, useAppState } from '@/lib/useAppState';
-import { plural } from '@/lib/plain';
+import { useAppState } from '@/lib/useAppState';
+import { fmtDate, plural, routeName } from '@/lib/plain';
 
-// Home: what needs you, and three big buttons. The same for everyone.
+// Home: what is waiting for you, and a short list to browse everything else.
 export default function Home() {
-  const { snap, reload } = useAppState();
-  const [err, setErr] = useState<string | null>(null);
-  if (!snap) return <div className="hello"><div className="eyebrow">Textile Flow</div><h1>Loading…</h1></div>;
+  const { snap } = useAppState();
+  if (!snap) return <div className="hello"><div className="eyebrow"><span className="brand"><span className="logo" />Textile Flow</span></div><h1>Loading…</h1></div>;
 
   const reviews = snap.reviews.filter((r: any) => r.state === 'pending').length;
-  const approvals = snap.approvals.filter((a: any) => a.state === 'pending').length;
+  const pend = snap.approvals.filter((a: any) => a.state === 'pending');
+  const approvals = pend.length;
   const unread = snap.alerts.filter((a: any) => !a.is_read).length;
   const needs = reviews + approvals;
   const first = reviews ? '/check' : '/pickups';
-
-  const items: any[] = snap.items;
-  const seen = items.filter((i) => i.state !== 'pending').length;
-  const allSorted = items.every((i) => ['tagged', 'rejected'].includes(i.state));
-  const intakeRun = snap.runs.find((r: any) => r.agent === 'intake' && !r.finished_at);
-  const dispRun = snap.runs.find((r: any) => r.agent === 'disposition' && !r.finished_at);
-  const go = async (url: string, body?: unknown) => { setErr(null); try { await post(url, body); reload(); } catch (e: any) { setErr(e.message); } };
+  const pi = pend[0]?.input;
+  const partner = pi && snap.recyclers.find((r: any) => r.id === pi.partner_id);
+  const nPick = (snap.pickups?.length ?? 0) + approvals;
+  const Tile = ({ href, ic, t, d, n }: any) => (<Link href={href} className="tile"><span className="ic">{ic}</span><span><b>{t}</b><span className="d">{d}</span></span><span className={`n ${n ? '' : 'zero'}`}>{n}</span></Link>);
+  const Row = ({ href, ic, t, d }: any) => (<Link href={href}><span className="bi">{ic}</span><span><b>{t}</b><span className="d">{d}</span></span><span className="go">{Ico.chev}</span></Link>);
 
   return (<>
-    <div className="hello"><div className="eyebrow">Textile Flow · {snap.today}</div><h1>What would you like to do?</h1></div>
+    <div className="hello"><div className="eyebrow"><span className="brand"><span className="logo" />Textile Flow</span><span className="date">{fmtDate(snap.today)}</span></div>
+      <h1>{needs > 0 ? `${plural(needs, 'item')} to review` : 'All caught up'}</h1></div>
     <main className="page">
+      <Tile href="/check" ic={Ico.label} t="Labels to review" d={reviews ? 'Fibre content we could not read' : 'Nothing waiting'} n={reviews} />
+      <Tile href="/pickups" ic={Ico.truck} t="Pickups to review" d={pi ? `${routeName(pi.route)}${partner ? ', ' + partner.name.replace(' (fictional)', '') : ''}` : 'Nothing waiting'} n={approvals} />
       {needs > 0
-        ? <Link href={first} className="need">{Ico.bell}<span>{plural(needs, 'thing')} need{needs === 1 ? 's' : ''} you<small>Tap to start</small></span></Link>
+        ? <Link href={first} className="big">Start reviewing</Link>
         : <div className="need ok">{Ico.check}<span>You are all caught up<small>Nothing is waiting for you</small></span></div>}
-
-      <Link href="/check" className="tile">
-        <span className="ic">{Ico.label}</span><span><b>Check labels</b><span className="d">Confirm what the agent could not be sure of</span></span>
-        <span className={`n ${reviews ? '' : 'zero'}`}>{reviews}</span></Link>
-      <Link href="/pickups" className="tile t2">
-        <span className="ic">{Ico.truck}</span><span><b>Approve pickups</b><span className="d">Say yes before a recycler is booked</span></span>
-        <span className={`n ${approvals ? '' : 'zero'}`}>{approvals}</span></Link>
-      <Link href="/messages" className="tile t3">
-        <span className="ic">{Ico.bell}</span><span><b>Messages</b><span className="d">Alerts about what is due and what to do</span></span>
-        <span className={`n ${unread ? '' : 'zero'}`}>{unread}</span></Link>
-
-      <section className="start">
-        {intakeRun ? <>
-          <h3><span className="spin" />Reading your labels…</h3>
-          <div className="prog"><i style={{ width: `${(seen / items.length) * 100}%` }} /></div>
-          <p>{seen} of {items.length} done. Anything under 0.80 confidence comes to you as a card.</p></>
-        : !allSorted ? <>
-          <h3>A new batch arrived</h3><p>{plural(items.length, 'item')} to classify from label and catalog descriptions.</p>
-          <button className="big go" onClick={() => go('/api/runs/intake', { batch_id: snap.batch?.batch_id })}>Start reading labels</button></>
-        : dispRun ? <><h3><span className="spin" />Looking for items that are due…</h3><p>Pickups that need your yes will appear on Approve pickups.</p></>
-        : <><h3>Due items</h3><p>This runs by itself every day. You can also run it now.</p>
-          <button className="big go" onClick={() => go('/api/runs/disposition')}>Run now</button></>}
-      </section>
-      {snap.batch && <Link href={`/results?batch=${encodeURIComponent(snap.batch.batch_id)}`} className="tile">
-        <span className="ic">{Ico.label}</span><span><b>Batch results</b><span className="d">See materials, sources and review decisions</span></span>
-      </Link>}
-      {err && <p className="err">{err}</p>}
+      <div className="sect">Browse</div>
+      <div className="browse">
+        <Row href="/check" ic={Ico.label} t="All labels" d={`${snap.items.length} in today’s batch`} />
+        <Row href="/pickups" ic={Ico.truck} t="All pickups" d={nPick ? plural(nPick, 'pickup') : 'None yet'} />
+        <Row href="/messages" ic={Ico.bell} t="Messages" d={unread ? plural(unread, 'new alert') : 'No new alerts'} />
+        <Row href="/guide" ic={Ico.book} t="Pile guide" d="What goes where" />
+        <Row href="/history" ic={Ico.clock} t="History" d="Past decisions you can change" />
+      </div>
       <div className="foot"><Link href="/team">For the tech team</Link></div>
     </main>
   </>);

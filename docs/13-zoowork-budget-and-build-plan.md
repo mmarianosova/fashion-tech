@@ -146,6 +146,8 @@ Nothing is ever auto-denied or timed out by our app. **Set the custom-tool timeo
 - **Send to someone** -> nothing is resolved; the pickup stays in the queue.
 
 **Known mismatch to resolve: ZooWork denies pending approvals after 10 minutes [Docs].** Our product rule is "never auto-deny, keep everything in queues". At the smoke test, **MEASURE** whether the 10-minute limit really applies to our setup. If it does, the engineer should choose one (cost shown per demo, [Estimate]):
+
+> **UI note.** The pickup screen is now called Pickups to review, with Book pickup / Reschedule / Don't book and no expiry text. The UI's intended answer to an unanswered approval is a "Pickup rescheduled" message, not a silent denial. See [ui-current.md](ui-current.md). This mismatch is still open on the backend.
 1. **Keep decisions fast in the demo** (decide within 10 minutes). Free. Recommended for the live demo.
 2. **Treat a timed-out approval as "expired, still in the queue"** in the app: the card stays; when a person answers Yes, the app starts one short targeted Disposition run that re-proposes only that pickup. Costs one extra small run (about $0.02-0.15 each) per expired pickup. Requires an app change (I can do it).
 3. Ask ZooWork whether the timeout is configurable (support@zoowork.ai).

@@ -1,5 +1,7 @@
 # Textile Sustainability Flow: app
 
+> **Current UI:** screen names and behavior are in [../docs/ui-current.md](../docs/ui-current.md). Older names in this file (Check labels, Approve pickups) are now Items to review and Pickups to review.
+
 Next.js (App Router, TypeScript) interface + backend for two ZooWork agents (Intake, Disposition). ZooWork runs the agents; this app runs the tools, the two human checkpoints (Check labels, Approve pickups), the Messages inbox and the cost guard. It is mobile first: Home has three big buttons, and every screen has one job.
 
 ## Run it (Codespaces)
@@ -11,6 +13,10 @@ npm test                          # 15 tests, plain Node, no network
 npm run preview                   # regenerate preview/index.html (standalone replay)
 ```
 `preview/index.html` opens by double-click. It replays a recorded run and is also the fallback demo if a live run stalls.
+
+## Connecting the UI to agents
+
+The demo page has a **live mode**: tap **Clear demo data** (or open `?mode=live`) to empty it, let an agent send inputs (`TextileFlow.push(...)`, `postMessage`, or polling `GET {api}/inputs`), and record every decision as an output event (`TextileFlow.outputs`, **Export outputs**, `POST {api}/events`). An adapter for the existing Next API (`?api=...&adapter=next`) is included. Full schema: [docs/agent-bridge.md](../docs/agent-bridge.md). No agent is connected yet; sample data is demo only.
 
 ## Deploy to Vercel
 1. Create a Turso (libSQL) database; set `DATABASE_URL` and `DATABASE_AUTH_TOKEN` in Vercel. Serverless disks are not persistent, so the default `file:local.db` only works locally.

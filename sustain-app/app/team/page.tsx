@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { useState } from 'react';
 import { post, useAppState } from '@/lib/useAppState';
 import { Conf, Empty, Feed, Metric, Pill, Tags } from '@/components/ui';
 import Top from '@/components/Top';
@@ -7,6 +8,8 @@ import Top from '@/components/Top';
 // For the team building this, not for the people using the app: cost guard, run controls, every item, and the raw agent feed.
 export default function Team() {
   const { snap, reload } = useAppState();
+  const [err, setErr] = useState<string | null>(null);
+  const go = async (url: string, body?: unknown) => { setErr(null); try { await post(url, body); reload(); } catch (e: any) { setErr(e.message); } };
   if (!snap) return <><Top title="Tech team" /><main className="page"><Empty>Loading…</Empty></main></>;
   const items: any[] = snap.items;
   const c = (s: string) => items.filter((i) => i.state === s).length;
@@ -20,6 +23,10 @@ export default function Team() {
         <Metric label="Tagged" n={c('tagged')} sub={`of ${items.length} items`} />
         <Metric label="Held / rejected" n={`${c('held')} / ${c('rejected')}`} sub="needs a person / removed" tone="m-amber" />
       </div>
+      <div className="card row">
+        <button className="alt" onClick={() => go('/api/runs/intake', { batch_id: snap.batch?.batch_id })}>Run label reading</button>
+        <button className="alt" onClick={() => go('/api/runs/disposition')}>Run due-items check</button></div>
+      {err && <p className="err">{err}</p>}
       {active.length > 0 && <div className="card row">{active.map((r: any) => <button key={r.session_id} className="no" onClick={async () => { await post('/api/stop', { session_id: r.session_id }); reload(); }}>Stop {r.agent} run</button>)}</div>}
       <h2>Items</h2>
       <div className="tbl"><table><thead><tr><th>Item</th><th>Label text</th><th>Status</th><th>Tags</th><th>Conf.</th></tr></thead>
