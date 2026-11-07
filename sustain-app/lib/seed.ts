@@ -22,3 +22,6 @@ export async function seed(db: Db, dataDir: string, now = () => new Date().toISO
 }
 
 export const loadRecyclers = (dataDir: string) => rd(dataDir, 'recyclers.json');
+
+// Who an item or pickup can be sent to when the reviewer wants someone else to decide. Edit data/people.json.
+export const loadPeople = (dataDir: string): { name: string; role: string }[] => rd(dataDir, 'people.json');

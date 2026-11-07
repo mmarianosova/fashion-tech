@@ -1,44 +1,60 @@
 'use client';
+import Link from 'next/link';
 import { useState } from 'react';
+import { Ico } from '@/components/icons';
 import { post, useAppState } from '@/lib/useAppState';
-import { Conf, Empty, Feed, Hero, Metric, Pill, Tags } from '@/components/ui';
+import { plural } from '@/lib/plain';
 
-export default function Intake() {
+// Home: what needs you, and three big buttons. The same for everyone.
+export default function Home() {
   const { snap, reload } = useAppState();
-  const [threshold, setThreshold] = useState(0.8);
   const [err, setErr] = useState<string | null>(null);
-  if (!snap) return <main><Empty>Loading...</Empty></main>;
+  if (!snap) return <div className="hello"><div className="eyebrow">Textile Flow</div><h1>Loading…</h1></div>;
+
+  const reviews = snap.reviews.filter((r: any) => r.state === 'pending').length;
+  const approvals = snap.approvals.filter((a: any) => a.state === 'pending').length;
+  const unread = snap.alerts.filter((a: any) => !a.is_read).length;
+  const needs = reviews + approvals;
+  const first = reviews ? '/check' : '/pickups';
+
   const items: any[] = snap.items;
-  const c = (s: string) => items.filter((i) => i.state === s).length;
-  const active = snap.runs.find((r: any) => r.agent === 'intake' && !r.finished_at);
-  const start = async () => { setErr(null); try { await post('/api/runs/intake', { batch_id: snap.batch.batch_id, threshold }); reload(); } catch (e: any) { setErr(e.message); } };
+  const seen = items.filter((i) => i.state !== 'pending').length;
+  const allSorted = items.length > 0 && items.every((i) => ['tagged', 'rejected'].includes(i.state));
+  const intakeRun = snap.runs.find((r: any) => r.agent === 'intake' && !r.finished_at);
+  const dispRun = snap.runs.find((r: any) => r.agent === 'disposition' && !r.finished_at);
+  const go = async (url: string, body?: unknown) => { setErr(null); try { await post(url, body); reload(); } catch (e: any) { setErr(e.message); } };
+
   return (<>
-    <Hero eyebrow={`Step 1 | Batch ${snap.batch?.batch_id}`} title="Scan labels. Tag every item."
-      sub="The Intake Agent reads each label, tags the garment for recycling, and holds anything it is unsure about for a person.">
-      <div className="row">
-        <label style={{ color: '#c6cbf5', fontSize: 13 }}>Hold below confidence<br />
-          <input type="number" step="0.05" min="0" max="1" value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} style={{ width: 90, marginTop: 4 }} /></label>
-        <button className="btn-ai" disabled={!!active} onClick={start}>{active ? 'Agent running...' : 'Start intake run'}</button>
-      </div>
-    </Hero>
-    <main className="pull">
+    <div className="hello"><div className="eyebrow">Textile Flow · {snap.today}</div><h1>What would you like to do?</h1></div>
+    <main className="page">
+      {needs > 0
+        ? <Link href={first} className="need">{Ico.bell}<span>{plural(needs, 'thing')} need{needs === 1 ? 's' : ''} you<small>Tap to start</small></span></Link>
+        : <div className="need ok">{Ico.check}<span>You are all caught up<small>Nothing is waiting for you</small></span></div>}
+
+      <Link href="/check" className="tile">
+        <span className="ic">{Ico.label}</span><span><b>Check labels</b><span className="d">Confirm what the agent could not be sure of</span></span>
+        <span className={`n ${reviews ? '' : 'zero'}`}>{reviews}</span></Link>
+      <Link href="/pickups" className="tile t2">
+        <span className="ic">{Ico.truck}</span><span><b>Approve pickups</b><span className="d">Say yes before a recycler is booked</span></span>
+        <span className={`n ${approvals ? '' : 'zero'}`}>{approvals}</span></Link>
+      <Link href="/messages" className="tile t3">
+        <span className="ic">{Ico.bell}</span><span><b>Messages</b><span className="d">Alerts about what is due and what to do</span></span>
+        <span className={`n ${unread ? '' : 'zero'}`}>{unread}</span></Link>
+
+      <section className="start">
+        {intakeRun ? <>
+          <h3><span className="spin" />Reading your labels…</h3>
+          <div className="prog"><i style={{ width: `${(seen / items.length) * 100}%` }} /></div>
+          <p>{seen} of {items.length} done. Anything under 0.80 confidence comes to you as a card.</p></>
+        : !allSorted ? <>
+          <h3>A new batch arrived</h3><p>{plural(items.length, 'label')} to read. The agent reads and tags each one, and holds only the ones it is unsure of.</p>
+          <button className="big go" onClick={() => go('/api/runs/intake', { batch_id: snap.batch?.batch_id })}>Start reading labels</button></>
+        : dispRun ? <><h3><span className="spin" />Looking for items that are due…</h3><p>Pickups that need your yes will appear on Approve pickups.</p></>
+        : <><h3>Due items</h3><p>This runs by itself every day. You can also run it now.</p>
+          <button className="big go" onClick={() => go('/api/runs/disposition')}>Run now</button></>}
+      </section>
       {err && <p className="err">{err}</p>}
-      <div className="metrics">
-        <Metric label="Items in batch" n={items.length} sub="waiting to be scanned" />
-        <Metric label="Tagged" n={c('tagged')} sub={`of ${items.length} items`} tone="m-green" />
-        <Metric label="Held for review" n={c('held')} sub="needs a person" tone="m-amber" />
-        <Metric label="Rejected" n={c('rejected')} sub="removed from the flow" tone="m-red" />
-        <Metric label="Still waiting" n={c('pending')} sub="agent has not reached them" tone="m-violet" />
-      </div>
-      {c('held') > 0 && <div className="card row" style={{ borderLeft: '5px solid var(--gate)' }}><b>{c('held')} item{c('held') > 1 ? 's' : ''} waiting for a person.</b><a href="/review">Open the review queue</a></div>}
-      <h2>Items</h2>
-      <div className="tbl"><table><thead><tr><th>Item</th><th>Garment</th><th>Label text</th><th>Status</th><th>Tags</th><th>Confidence</th></tr></thead>
-        <tbody>{items.map((i) => (<tr key={i.item_key}>
-          <td className="key">{i.item_key}</td><td>{i.garment_type}<div className="sub">{i.color}</div></td><td className="lbl">{i.label_text || <i className="sub">no label text</i>}</td>
-          <td><Pill v={i.state} /></td>
-          <td>{i.stream ? <Tags t={{ stream: i.stream, fibre_type: i.fibre_type, color_group: i.color_group, condition: i.condition }} /> : ''}</td>
-          <td><Conf v={i.confidence} /></td></tr>))}</tbody></table></div>
-      <h2>Live agent feed</h2><Feed events={snap.events} />
+      <div className="foot"><Link href="/team">For the tech team</Link></div>
     </main>
   </>);
 }

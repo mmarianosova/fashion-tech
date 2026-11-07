@@ -37,12 +37,14 @@ Serverless caution: keep every handler short and idempotent. Do not hold a strea
 - MCP (`/mcp`): `search_recyclers({route})`, `book_pickup({partner_id,route,items,lots,deadline})`; data from `data/recyclers.json`; `book_pickup` also validates `min_items`. Tools appear as `mcp__recyclerdirectory__*`.
 Validate every tool input (zod). Never take user or tenant identity from tool input.
 
-## 4. Screens (all four)
-1. **Intake** (`/`): choose a batch (seed set or ingested dataset), threshold slider (default 0.80), Start. Live feed: per-item rows turn from pending to tagged/held as `save_tags`/`hold_for_review` arrive; counters; run summary.
-2. **Review queue** (`/review`): held items with label text (and image if present), proposed tags, reason, confidence. Buttons: Approve, Edit (dropdowns for the 4 tags), Reject. Badge count in the nav.
-3. **Disposition** (`/disposition`): "Run today's review" (DEMO_TODAY), live feed, the due/skipped table with reasons, pending pickup approvals with Approve/Deny and the proposed items and lots, resulting routes and lots view, pickup request file link (artifact URL is a bearer credential: show only to the demo user).
-4. **Alerts and cost** (`/alerts`): inbox of alerts (type badge, items, deadline, next step), unread count; side panel with balance, usage for the last 24 h, session cost, a Stop button (sends `user.interrupt`).
-Design: clean, readable at projector size, status colours plus text labels (not colour alone).
+## 4. Screens (mobile first, one job per screen)
+The app is built for people with little tech experience: big type, one thing to do per screen, plain words. Same screens for everyone (no roles, no login in the demo build). It shows only the six steps in the use-case one-pager and the two human checkpoints.
+1. **Home** (`/`): a banner "N things need you", three big buttons with count badges (Check labels, Approve pickups, Messages), and one start card: "Start reading labels" when a new batch arrives (starts the Intake Agent), then "Run now" (starts the Disposition Agent; it also runs on its daily schedule).
+2. **Check labels** (`/check`): checkpoint 1. Cards for items the Intake Agent held (confidence under 0.80). Swipe right or "Yes, right" approves the proposed tags. Swipe left or "Not right" asks what to do: Change it (pick the pile), Send to someone (a named person from `data/people.json`; the item stays in the queue, a message is posted, the agent keeps waiting), or Take it out of this batch (reject).
+3. **Approve pickups** (`/pickups`): checkpoint 2. One card per proposed pickup (route, collector, hand-over date, items). Swipe right or "Yes, book it" approves `book_pickup`. Left: Send to someone, or Do not book it (deny). Once booked, the pickup request file opens from the list.
+4. **Messages** (`/messages`): the inbox: one alert per decision (`donate_recycle_due`, `review_waiting`) plus the "Sent to someone" notes. Mark all read.
+Tech-team page (`/team`, linked small at the bottom of Home): ZooWork balance, runs with a Stop button, every item, the raw live agent feed.
+**No timeouts:** nothing is auto-denied; held items and pickups wait in their queues until a person decides.
 
 ## 5. Cost guard (mandatory)
 Before every run start: read `GET /balance` and `GET /usage?range=24h&group_by=session`; refuse if balance < BALANCE_FLOOR_USD. While running: if session cost > RUN_COST_LIMIT_USD, send `user.interrupt`. Closing a stream does not cancel a run. No retry loops without a cap. Transcript cost fields read 0; only `/usage` counts, and it lags.
@@ -58,6 +60,6 @@ Write a fake ZooWork transport (SDK accepts a custom transport/fetch) that repla
 - Webhooks may not work with a Platform key: keep the poller path.
 - Vercel function time limits: short handlers, state in DB.
 - MCP endpoint redirects (www, trailing slash) break ZooWork: test `curl -i`.
-- The 10-minute approval auto-deny: demo approvals right away; the Intake hold has no deadline.
+- Approval timeout: the use-case PDFs mention an auto-deny after 10 minutes. Team decision: nothing is ever auto-denied by our app, and held items and pickups stay in their queues until a person decides. At the smoke test, check whether ZooWork itself ends a waiting approval after a timeout. If it does, the agent gets a denial and sends a `review_waiting` alert, and the team must decide whether to re-run. Demo approvals right away.
 - Artifact URLs are credentials; do not log or expose them.
 - Image upload speed: use few or no images in the live demo; pre-upload before the clock if allowed.

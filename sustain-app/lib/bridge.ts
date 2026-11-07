@@ -102,3 +102,35 @@ export async function resolveApproval(d: Deps, approvalId: string, allow: boolea
   await d.db.run('UPDATE approvals SET state=?,decided_at=? WHERE approval_id=?', [allow ? 'allowed' : 'denied', d.now(), approvalId]);
   return { already: false, state: allow ? 'allowed' : 'denied' };
 }
+
+// ---- "Send to someone": the reviewer is not sure and wants a named person to decide ----
+// Nothing is decided and the agent keeps waiting: the item or pickup stays in the queue, marked with who it was sent to,
+// and a message goes to the inbox. There is no timeout and nothing is ever auto-denied.
+async function postMessage(d: Deps, items: string[], summary: string, next_step: string) {
+  await d.db.run(
+    `INSERT INTO alerts (alert_id,type,items,location,deadline,next_step,recycler_address,summary,created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+    [d.newId('msg'), 'question', j(items), null, null, next_step, null, summary, d.now()]);
+}
+
+export async function sendReviewTo(d: Deps, reviewId: string, person: string, note?: string) {
+  const r = (await d.db.all('SELECT * FROM reviews WHERE review_id=?', [reviewId]))[0];
+  if (!r) throw new Error('unknown review');
+  if (!person) throw new Error('person required');
+  if (r.state !== 'pending') return { already: true, state: r.state };
+  if (r.sent_to === person) return { already: true, state: 'pending', sent_to: person };
+  await d.db.run('UPDATE reviews SET sent_to=?,sent_at=? WHERE review_id=?', [person, d.now(), reviewId]);
+  await postMessage(d, [r.item_key], `Sent to ${person}: ${r.item_key} needs a second look. ${note || r.reason}`, `${person} to decide. It stays in Check labels until someone answers.`);
+  return { already: false, state: 'pending', sent_to: person };
+}
+
+export async function sendApprovalTo(d: Deps, approvalId: string, person: string, note?: string) {
+  const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
+  if (!a) throw new Error('unknown approval');
+  if (!person) throw new Error('person required');
+  if (a.state !== 'pending') return { already: true, state: a.state };
+  if (a.sent_to === person) return { already: true, state: 'pending', sent_to: person };
+  const input = p(a.input) ?? {};
+  await d.db.run('UPDATE approvals SET sent_to=? WHERE approval_id=?', [person, approvalId]);
+  await postMessage(d, input.items ?? [], `Sent to ${person}: a ${String(input.route ?? '').replace('_', ' ')} pickup needs a second look.${note ? ' ' + note : ''}`, `${person} to decide. The booking stays in Approve pickups until someone answers.`);
+  return { already: false, state: 'pending', sent_to: person };
+}

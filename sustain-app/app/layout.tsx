@@ -1,6 +1,6 @@
 import './globals.css';
-import Nav from '@/components/Nav';
-export const metadata = { title: 'Textile Flow', description: 'Scan labels, sort garments, notify people' };
+export const metadata = { title: 'Textile Flow', description: 'Check clothing labels, sort garments, and approve pickups' };
+export const viewport = { width: 'device-width', initialScale: 1 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (<html lang="en"><body><div className="shell"><Nav /><div className="content">{children}</div></div></body></html>);
+  return (<html lang="en"><body><div className="app">{children}</div></body></html>);
 }

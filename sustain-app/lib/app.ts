@@ -2,7 +2,7 @@
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { libsqlDb, type Db } from './db.ts';
-import { seed, loadRecyclers } from './seed.ts';
+import { seed, loadRecyclers, loadPeople } from './seed.ts';
 import { FakeZoo, checkStart, realZoo, type ZooClient } from './zoo.ts';
 import { handleEvent, resolveApproval, type Deps } from './bridge.ts';
 import { simulateDisposition, simulateIntake } from './sim.ts';
@@ -37,12 +37,9 @@ async function init(): Promise<App> {
 }
 
 // In fake mode the "person" decisions come from the UI; the simulator polls the DB until they arrive.
-const pollWait = (timeoutMs = 10 * 60_000) => async (check: () => Promise<boolean>) => {
-  const t0 = Date.now();
-  while (!(await check())) {
-    if (Date.now() - t0 > timeoutMs) throw new Error('timed out waiting for a person');
-    await new Promise((r) => setTimeout(r, 400));
-  }
+// There is deliberately no timeout: a held item or a pickup stays in its queue until a person decides. Nothing is auto-denied.
+const pollWait = () => async (check: () => Promise<boolean>) => {
+  while (!(await check())) await new Promise((r) => setTimeout(r, 400));
 };
 const pace = () => new Promise((r) => setTimeout(r, Number(process.env.PACE_MS ?? 350))); // slows fake runs so the live feed is visible
 
@@ -106,7 +103,7 @@ export async function snapshot() {
     alerts: (await q('SELECT * FROM alerts ORDER BY rowid DESC')).map((r) => ({ ...r, items: p(r.items) })),
     runs: await q('SELECT * FROM runs ORDER BY started_at DESC LIMIT 6'),
     events: (await q('SELECT id,session_id,type,payload,created_at FROM events ORDER BY id DESC LIMIT 40')).map((e) => ({ ...e, payload: p(e.payload) })),
-    plan: pl, recyclers: a.mcp.recyclers, inventoryCount: inventory.length,
+    plan: pl, recyclers: a.mcp.recyclers, people: loadPeople(join(process.cwd(), 'data')), inventoryCount: inventory.length,
   };
 }
 

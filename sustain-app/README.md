@@ -1,6 +1,6 @@
 # Textile Sustainability Flow: app
 
-Next.js (App Router, TypeScript) interface + backend for two ZooWork agents (Intake, Disposition). ZooWork runs the agents; this app runs the tools, the review/approval UI, the alerts inbox and the cost guard.
+Next.js (App Router, TypeScript) interface + backend for two ZooWork agents (Intake, Disposition). ZooWork runs the agents; this app runs the tools, the two human checkpoints (Check labels, Approve pickups), the Messages inbox and the cost guard. It is mobile first: Home has three big buttons, and every screen has one job.
 
 ## Run it (Codespaces)
 ```bash
@@ -26,7 +26,7 @@ Rules match the Python reference on all 32 seed items and the full disposition p
 - `lib/zoo.ts` `realZoo()` guesses SDK method names from the docs. Check against `node_modules/@zoowork-ai/sdk` types and fix there only.
 - `lib/bridge.ts` `normalizeEvent()` guesses event field names (`call_id`, `name`, `input`, `approval_id`). Log one real event and adjust.
 - Webhook payload shape in `app/api/zoowork/webhook/route.ts` (`session_id`); webhooks may not work with a Platform key, so the UI also pumps `/api/pump` every 3 s.
-- Not built yet: batch upload UI, image upload to the agent workspace, app login (the app is open: keep the URL private), Edit/Reject are in the app but not in the replay preview.
+- Not built yet: batch upload UI, image upload to the agent workspace, app login (the app is open: keep the URL private), the replay preview is a recording: whatever you choose on a card, the story continues the same way. The pickup request page is built by the app from the booking; the real agent's own `artifact_publish` file is a separate copy (link not wired in yet). Nothing times out: held items and pickups wait until a person decides.
 
 ## Map
 `lib/rules.ts` rules (port of the Python reference) | `lib/tools.ts` the five custom tools | `lib/bridge.ts` events, reviews, approvals | `lib/mcp.ts` recycler-directory | `lib/zoo.ts` ZooWork boundary + fake | `lib/sim.ts` scripted agents | `lib/app.ts` server wiring, run start, snapshot | `app/` pages and routes | `data/` seed fixtures | `tests/` | `scripts/make-preview.ts`.

@@ -1,7 +1,7 @@
 {
-  "_note": "Schedules fire as soon as enabled and a stopped agent skips firings. For the demo, create with a far-future cron so it never fires on its own, and trigger the same message manually. Delete schedules before deleting the agent. Use five-field cron plus tz.",
+  "_note": "The Disposition Agent runs on a daily schedule (09:00 UTC below) plus a Run now button in the app, which sends the same message. Schedules fire as soon as enabled and a stopped agent skips firings, so this ships disabled: enable it only when the team wants the daily run live (it costs a run per day). Delete schedules before deleting the agent. Use five-field cron plus tz.",
   "schedule_id": "disposition-daily",
-  "schedule": {"kind": "cron", "expr": "0 9 1 1 *", "tz": "UTC"},
+  "schedule": {"kind": "cron", "expr": "0 9 * * *", "tz": "UTC"},
   "payload": {
     "kind": "agentTurn",
     "message": "Run the daily disposition review. Today is {{TODAY}}. Pickup lead time is 7 days. Review all inventory, route due items, book pickups, send alerts, and finish with the summary."

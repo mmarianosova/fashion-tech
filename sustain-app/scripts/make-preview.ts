@@ -15,17 +15,14 @@ const sim = await import('../lib/sim.ts');
 
 type Frame = any;
 const frames: Frame[] = [];
+let phase = 'start'; // start -> intake -> intake_done -> disp -> disp_done: lets the replay know which run a frame belongs to
 const trim = (snap: any, gate: string | null, note: string): Frame => ({
-  gate, note, today: snap.today,
+  gate, note, phase, today: snap.today,
   items: snap.items.map((i: any) => [i.item_key, i.garment_type, i.color, i.label_text, i.state, i.stream, i.fibre_type, i.color_group, i.confidence, i.condition]),
   reviews: snap.reviews.map((r: any) => ({ id: r.review_id, item: r.item_key, state: r.state, reason: r.reason, conf: r.confidence, label: r.label_text, proposed: r.proposed_tags, decided: r.decided_tags })),
   approvals: snap.approvals.map((a: any) => ({ id: a.approval_id, state: a.state, input: a.input })),
-  pickups: snap.pickups.map((p: any) => ({ id: p.booking_id, route: p.route, partner: p.partner_id, n: p.items.length, deadline: p.deadline })),
+  pickups: snap.pickups.map((p: any) => ({ id: p.booking_id, route: p.route, partner: p.partner_id, n: p.items.length, deadline: p.deadline, items: p.items, lots: p.lots })),
   alerts: snap.alerts.map((a: any) => ({ id: a.alert_id, type: a.type, summary: a.summary, items: a.items, location: a.location, deadline: a.deadline, next: a.next_step })),
-  plan: { due: snap.plan.due.length, pickups: snap.plan.pickups.length, esc: snap.plan.escalations, skipped: snap.plan.skipped.length,
-    routes: snap.plan.routes.map((r: any) => [r.item_key, r.route, r.color_group, r.reasons]), escalations: snap.plan.escalations },
-  events: snap.events.slice(0, 14).map((e: any) => [e.created_at.slice(11, 19), e.type, e.payload?.name ?? (e.payload?.tool ? 'approval: ' + String(e.payload.tool).split('__').pop() : e.payload?.status ?? ''), e.payload?.input?.item_key ?? '']),
-  inv: snap.inventoryCount,
 });
 let tick = 0;
 const rec = async (gate: string | null = null, note = '') => { frames.push(trim(await app.snapshot(), gate, note)); };
@@ -33,6 +30,7 @@ const origResolve = s.zoo.resolveCustomToolCall.bind(s.zoo);
 s.zoo.resolveCustomToolCall = async (...a: any[]) => { await (origResolve as any)(...a); if (++tick % 3 === 0) await rec(null, 'agent working'); };
 
 await rec(null, 'Ready: 32 items waiting in batch SEED-1');
+phase = 'intake';
 const run1 = await app.startRun('intake', { batchId: 'SEED-1', threshold: 0.8 });
 // intake: the sim waits on holds; we record the pending frame, then play the reviewer
 let sawIntakeDone = false;
@@ -50,7 +48,10 @@ const waitReview = async () => {
   }
 };
 await waitReview();
+phase = 'intake_done';
 await rec(null, 'Intake run finished: 27 tagged automatically, 5 reviewed by a person');
+
+phase = 'disp';
 
 const run2 = await app.startRun('disposition', {});
 let dispDone = false;
@@ -64,17 +65,14 @@ for (let k = 0; k < 400 && !dispDone; k++) {
   if ((await s.db.all('SELECT finished_at FROM runs WHERE session_id=?', [run2.sessionId]))[0].finished_at) dispDone = true;
   await new Promise((r) => setTimeout(r, 30));
 }
+phase = 'disp_done';
 await rec(null, 'Disposition run finished: pickups booked, alerts sent');
-
-// repeat run to show the double-alert guard
-const run3 = await app.startRun('disposition', {});
-for (let k = 0; k < 200; k++) { if ((await s.db.all('SELECT finished_at FROM runs WHERE session_id=?', [run3.sessionId]))[0].finished_at) break; await new Promise((r) => setTimeout(r, 30)); }
-await rec(null, 'Second run, same day: nothing new is due, no duplicate alerts');
 
 const tpl = readFileSync(join(root, 'scripts', 'preview.template.html'), 'utf8');
 const css = readFileSync(join(root, 'app', 'globals.css'), 'utf8');
-const partners = Object.fromEntries(s.mcp.recyclers.map((r: any) => [r.id, r.name.replace(' (fictional)', '')]));
-const html = tpl.replace('/*CSS*/', css).replace('/*FRAMES*/', 'const FRAMES=' + JSON.stringify(frames) + ';const PARTNERS=' + JSON.stringify(partners) + ';');
+const partners = Object.fromEntries(s.mcp.recyclers.map((r: any) => [r.id, { name: r.name.replace(' (fictional)', ''), address: r.address }]));
+const people = JSON.parse(readFileSync(join(root, 'data', 'people.json'), 'utf8')).map((p: any) => p.name);
+const html = tpl.replace('/*CSS*/', css).replace('/*FRAMES*/', 'const FRAMES=' + JSON.stringify(frames) + ';const PARTNERS=' + JSON.stringify(partners) + ';const PEOPLE=' + JSON.stringify(people) + ';');
 mkdirSync(join(root, 'preview'), { recursive: true });
 writeFileSync(join(root, 'preview', 'index.html'), html);
 console.log(`frames=${frames.length} gates=${frames.filter((f) => f.gate).length} size=${(html.length / 1024).toFixed(0)} KB`);
