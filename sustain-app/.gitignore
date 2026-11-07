@@ -5,3 +5,4 @@ local.db*
 .env.local
 
 data/dropoff-sites.local.json
+public/team-preview.html

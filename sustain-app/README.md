@@ -88,3 +88,39 @@ UPC in a workbook link is skipped. Catalog pages cannot provide the condition
 of the physical item.
 The local test run uses scripted ZooWork events. Live mode requires deployed
 agents and credentials and must be verified against that environment.
+
+## Team walkthrough
+
+This uses the team's existing Textile Flow preview in live UI mode with
+scripted agents and fictional inventory. The app sends no real pickup requests.
+
+```sh
+npm install
+node scripts/prepare-team-demo.ts
+DATABASE_URL=file:local.db.team-demo ZOO_MODE=fake DEMO_TODAY=2026-11-07 TEXTILE_FLOW_BRIDGE=1 INTAKE_WEB_LOOKUP=0 npm run dev -- --hostname 127.0.0.1 --port 4319
+```
+
+Open http://127.0.0.1:4319/team-preview.html?mode=live&api=http://127.0.0.1:4319&adapter=events.
+In another terminal, start Intake with:
+
+```sh
+curl -fsS -X POST http://127.0.0.1:4319/api/runs/intake -H 'Content-Type: application/json' -d '{"batch_id":"TEAM-DEMO"}'
+```
+
+Open **Labels**. Three complete labels are accepted. For the faded label,
+choose **No** then **Delete from pile** so it does not enter Disposition.
+After Intake finishes, start Disposition:
+
+```sh
+curl -fsS -X POST http://127.0.0.1:4319/api/runs/disposition
+```
+
+Open **Pickups** and choose **Book pickup** for the three denim items. Open
+**Messages** to see the handover notice for Blue Cycle Denim (fictional).
+Use **Export outputs** to inspect the interface events.
+
+The walkthrough includes fictional condition, location and due dates. Catalog-only
+material results stay out of Disposition until the physical inventory is recorded.
+The existing UI's **Change this** sends a sorting pile, so it cannot send corrected
+fibre percentages. Pickup item edits and reopening finished decisions are also
+unsupported by the backend. Keep the bridge on loopback or behind access control.
