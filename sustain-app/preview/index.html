@@ -229,6 +229,16 @@ button.note.tap{width:100%;text-align:left;font:inherit;font-weight:400;color:in
 .k-row{display:flex;align-items:center;justify-content:space-between;height:28px;margin-bottom:6px}
 .chk{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 14px;background:#fff;border:2px solid var(--line);border-radius:16px;color:var(--ink);font-weight:700;margin-bottom:8px}.chk.on{border-color:var(--blue-line);background:var(--blue-soft);color:var(--blue)}.chk .bx{width:22px;height:22px;border-radius:7px;border:2px solid var(--mute);display:grid;place-items:center;flex:none}.chk.on .bx{background:var(--blue);border-color:var(--blue);color:#fff}.chk .bx svg{width:14px;height:14px}
 .chk.add{border-style:dashed;border-color:var(--blue-line);color:var(--blue)}.chk.add .bx{border-color:var(--blue);color:var(--blue)}
+
+.mat{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;flex:none;overflow:hidden}.mat svg{width:24px;height:24px}.mat img{width:100%;height:100%;object-fit:cover}
+.mat.s{width:30px;height:30px;border-radius:10px}.mat.s svg{width:17px;height:17px}
+.m-shred{background:#E3F5EA;color:#1A6B3C}.m-denim{background:#E6F0FF;color:#006BFF}.m-mixed{background:#FFF1D6;color:#8A4B00}.m-trash{background:#FDE8E8;color:#B42318}.m-donate{background:#F1E8FF;color:#6B3FC0}
+.matrow,.matline{display:flex;gap:12px;align-items:flex-start}.matrow{background:var(--bg);border-radius:16px;padding:12px}
+.matrow b{display:block;font-size:.9375rem;font-weight:700}.matrow .d{display:block;font-size:.8125rem;line-height:1.35;color:var(--mute);margin-top:2px}
+.matline .big-t{margin:0}.matline .why{margin-top:2px}
+.gcard{display:flex;gap:14px;align-items:flex-start;background:#fff;border-radius:20px;box-shadow:var(--shadow);padding:16px;margin-bottom:12px}
+.gcard b{display:block;font-size:1rem;font-weight:800}.gcard p{margin:4px 0 6px;font-size:.875rem;line-height:1.4;color:var(--ink)}.gcard small{font-size:.75rem;color:var(--mute)}
+.chk .mat{margin-left:-2px}
 </style></head>
 <body class="demo"><div class="app" id="app"></div>
 <script>
@@ -236,7 +246,7 @@ const FRAMES=[{"gate":null,"note":"Ready: 32 items waiting in batch SEED-1","pha
 // Demo mode: a recorded run of the real app code, replayed as the phone screens. The work happens in the background by itself;
 // the person only decides the items that come up. Whatever is chosen, the recorded story continues the same way. Nothing here is real data.
 const S = (d, w = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-const I = { plus: S('<path d="M12 5v14M5 12h14"/>', 2.2), back: S('<path d="M15 6l-6 6 6 6"/>'), check: S('<path d="M5 12l5 5L20 7"/>', 2.4), x: S('<path d="M6 6l12 12M18 6 6 18"/>', 2.2),
+const I = { book: S('<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>'), plus: S('<path d="M12 5v14M5 12h14"/>', 2.2), back: S('<path d="M15 6l-6 6 6 6"/>'), check: S('<path d="M5 12l5 5L20 7"/>', 2.4), x: S('<path d="M6 6l12 12M18 6 6 18"/>', 2.2),
   home: S('<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'),
   label: S('<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>'),
   truck: S('<path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>'),
@@ -252,6 +262,17 @@ const I = { plus: S('<path d="M12 5v14M5 12h14"/>', 2.2), back: S('<path d="M15 
   batt: '<svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect x="0.5" y="0.5" width="22" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="19" height="8" rx="2" fill="currentColor"/><rect x="24" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" opacity=".4"/></svg>' };
 const PILE = { shred: ['Shred pile', 'mostly natural fibres, like cotton'], denim: ['Denim pile', 'jeans and denim'], mixed: ['Mixed pile', 'mixed or man-made fabric'], trash: ['Throw away', 'cannot be reused'] };
 const ROUTE = { donate: 'Donation', recycle_shred: 'Fabric shredding', recycle_denim: 'Denim recycling', recycle_mixed: 'Mixed fabric recycling', dispose: 'Disposal' };
+// Material guide: one icon and one plain sentence per category. Used on the pickup card, label card, Edit items and the Pile guide.
+const MAT = {
+  shred: { name: 'Shred pile', desc: 'Mostly natural fibres such as cotton or wool. Shredded back into loose fibre for stuffing, insulation and new yarn.', eg: 'T-shirts, sweaters, towels', ic: '<path d="M4 7c3-2 5 2 8 0s5-1 8 0"/><path d="M4 12c3-2 5 2 8 0s5-1 8 0"/><path d="M4 17c3-2 5 2 8 0s5-1 8 0"/>' },
+  denim: { name: 'Denim pile', desc: 'Jeans and other denim. The cotton is strong, so denim is recycled on its own and spun into new fibre.', eg: 'Jeans, denim jackets, denim shorts', ic: '<path d="M7 3h10l1 18h-5l-1-9-1 9H6z"/><path d="M7 7h10"/>' },
+  mixed: { name: 'Mixed pile', desc: 'Blends and man-made fabric such as polyester or nylon. Sent to recyclers that can separate mixed fibres.', eg: 'Leggings, fleece, polyester dresses', ic: '<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/>' },
+  trash: { name: 'Throw away', desc: 'Too damaged or dirty to reuse or recycle. Disposed of safely.', eg: 'Mouldy, soaked or badly torn items', ic: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>' },
+  donate: { name: 'Donation', desc: 'Clean items in good, wearable condition. Passed to a charity partner to be worn again.', eg: 'Wearable tops, coats, accessories', ic: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.6-7 10-7 10z"/>' },
+};
+const ROUTE_MAT = { donate: 'donate', recycle_shred: 'shred', recycle_denim: 'denim', recycle_mixed: 'mixed', dispose: 'trash' };
+const matKey = (k) => (MAT[k] ? k : 'mixed');
+const tile = (k, size = '') => `<span class="mat m-${matKey(k)} ${size}">${S(MAT[matKey(k)].ic, 1.8)}</span>`;
 const TITLE = { rescheduled: 'Pickup rescheduled', reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Item to review', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
 const TAG = { rescheduled: 'PICKUP', reply: 'REPLY', donate_recycle_due: 'PICKUP', review_waiting: 'REVIEW' };
 const ITEM = Object.fromEntries(FRAMES[0].items.map((i) => [i[0], { garment: i[1], color: i[2] }]));
@@ -263,6 +284,7 @@ const plural = (n, a, b) => `${n} ${n === 1 ? a : (b || a + 's')}`;
 const pile = (s) => (PILE[s] ? PILE[s][0] : 'Not sure');
 const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const ids = (it = []) => it.slice(0, 6).map((x) => `<span>${esc(x)}</span>`).join('') + (it.length > 6 ? `<span>+${it.length - 6} more</span>` : '');
+const thumb = (k) => { const r = F().items.find((i) => i[0] === k) || []; return r[10] ? `<span class="mat s"><img src="${esc(r[10])}" alt=""></span>` : tile(r[5], 's'); };
 const garment = (k) => { const it = ITEM[k] || {}; return [it.color, it.garment].filter(Boolean).join(' '); };
 
 // Demo history: a few earlier decisions so the History screen is not empty. New choices are added on top.
@@ -334,6 +356,7 @@ function home() {
     ${brow('check', I.label, 'All labels', `${f.items.length} in today’s batch`)}
     ${brow('pickups', I.truck, 'All pickups', nPick ? plural(nPick, 'pickup') : 'None yet')}
     ${brow('messages', I.bell, 'Messages', un ? plural(un, 'new alert') : 'No new alerts')}
+    ${brow('guide', I.book, 'Pile guide', 'What goes where')}
     ${brow('history', I.clock, 'History', 'Past decisions you can change')}</div></main>`;
 }
 
@@ -342,7 +365,7 @@ function reviewFace(r) {
   return `<div class="sc-head"><span class="sc-key">${esc(r.item)}</span><span class="chip-gate">${who ? 'With ' + esc(who) : 'To review'}</span></div>
     <div class="what">${esc(garment(r.item))}</div>
     <div class="label-box"><div class="k">The label says</div><div class="v">${esc(r.label || 'Nothing could be read')}</div></div>
-    <div class="think"><div class="k">Suggested category</div><div class="big-t">${r.proposed ? pile(r.proposed.stream) : 'Not sure'}</div><div class="why">${esc(r.reason)}</div></div><div class="ask">Is that right?</div>`;
+    <div class="think"><div class="k">Suggested category</div>${r.proposed ? `<div class="matline">${tile(r.proposed.stream)}<div><div class="big-t">${pile(r.proposed.stream)}</div><div class="why">${esc(MAT[matKey(r.proposed.stream)].desc)}</div></div></div>` : '<div class="big-t">Not sure</div>'}<div class="why" style="margin-top:8px">${esc(r.reason)}</div></div><div class="ask">Is that right?</div>`;
 }
 function check() {
   const q = queue(pendRev()), t = q[0], n = q[1];
@@ -358,10 +381,11 @@ function pickups() {
   const q = queue(pendApp()), t = q[0], n = q[1], booked = F().pickups, head = topbar('Pickups to review', 'Confirm each pickup before the recycler is booked.');
   if (!t && st.timer) return head + `<main class="page">${done('<span class="spin"></span>', 'Looking for items that are due', 'Pickups to review appear here.')}</main>`;
   if (!t && !booked.length) return head + `<main class="page">${done(I.check, 'Nothing to review', 'When items are due to leave, their pickups show up here.')}</main>`;
-  if (!t) return head + `<main class="page"><div class="count">${plural(booked.length, 'pickup')} booked</div>${booked.map((p) => `<div class="note"><div class="note-ico n-ok">${I.truck}</div><div><h4>${ROUTE[p.route] || p.route}</h4><p>${esc((PARTNERS[p.partner] || {}).name)}</p><p class="nx">Hand over by ${fmt(p.deadline)} · ${plural(p.n, 'item')}</p><button class="alt" style="margin-top:8px;min-height:44px;padding:8px 16px" data-act="doc" data-arg="${esc(p.id)}">Open pickup request</button></div></div>`).join('')}</main>`;
+  if (!t) return head + `<main class="page"><div class="count">${plural(booked.length, 'pickup')} booked</div>${booked.map((p) => `<div class="note">${tile(ROUTE_MAT[p.route])}<div><h4>${ROUTE[p.route] || p.route}</h4><p>${esc((PARTNERS[p.partner] || {}).name)}</p><p class="nx">Hand over by ${fmt(p.deadline)} · ${plural(p.n, 'item')}</p><button class="alt" style="margin-top:8px;min-height:44px;padding:8px 16px" data-act="doc" data-arg="${esc(p.id)}">Open pickup request</button></div></div>`).join('')}</main>`;
   const i = t.input || {}, p = PARTNERS[i.partner_id] || {}, who = st.sent[t.id], ni = n && n.input ? n.input : null;
   return head + `<main class="page"><div class="pick">
     <div class="head"><b>${esc(ROUTE[i.route] || i.route)}</b><span class="chip-gate" style="margin-left:0">${who ? 'With ' + esc(who) : 'To review'}</span></div>
+    <div class="matrow">${tile(ROUTE_MAT[i.route])}<div><b>${esc((MAT[matKey(ROUTE_MAT[i.route])] || {}).name)}</b><span class="d">${esc((MAT[matKey(ROUTE_MAT[i.route])] || {}).desc)}</span></div></div>
     <div class="when"><div class="cal"><span>${mon(i.deadline)}</span><strong>${dom(i.deadline)}</strong></div><div><div class="k">Hand over by</div><div class="who">${esc(p.name || i.partner_id)}</div><div class="addr">${I.pin}${esc(p.address || '')}</div></div></div>
     <div><div class="k-row"><span class="k">Items ${itemsOf(t).length}</span><button class="editlink" data-act="app-edit">${I.wrench}Edit items</button></div><div class="ids">${ids(itemsOf(t))}</div></div>
     <div class="actions"><button class="btn-yes" data-act="yes">Book pickup</button>
@@ -391,6 +415,9 @@ function history() {
     ${f === 'all' || f === 'alerts' ? grp('Alerts seen', seenAlerts.length ? seenAlerts.map((h) => row(h, I.bell, 'msgopen', 'Open')).join('') : `<div class="hrow"><span class="t"><small>No alerts seen yet.</small></span></div>`) : ''}</main>`;
 }
 
+function guide() {
+  return topbar('Pile guide', 'What each pile means and what happens to it.') + `<main class="page">${Object.entries(MAT).map(([k, m]) => `<div class="gcard">${tile(k)}<div><b>${esc(m.name)}</b><p>${esc(m.desc)}</p><small>For example: ${esc(m.eg)}</small></div></div>`).join('')}</main>`;
+}
 function sheets() {
   const rv = queue(pendRev())[0], ap = queue(pendApp())[0], who = (act) => PEOPLE.map((p) => opt(I.person, p, '', act, '', p)).join('');
   if (st.sheet === 'msg' && st.open) { const m = alerts().find((x) => x.id === st.open), t = m && msgTarget(m); if (m) return sheet(msgTitle(m), (m.items || []).join(', '), `<p class="msg-body">${esc(m.summary)}</p>${m.deadline ? `<p class="msg-body nx">By ${fmt(m.deadline)}</p>` : ''}${m.next ? `<p class="msg-body nx">${esc(m.next)}</p>` : ''}${t ? `<button class="big-link" data-act="${t[0]}">${t[1]}</button>` : ''}`); }
@@ -400,8 +427,8 @@ function sheets() {
   if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Don’t book it', 'The items come back on the next run.', 'app-deny', 'bad'));
   if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The pickup is proposed again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
   if (st.sheet === 'app-edit' && ap) { const all = baseItems(ap), gone = st.removed[ap.id] || [], more = addable(ap);
-    return sheet('Edit items', 'Tap an item to leave it out of this pickup.', all.map((x) => `<button class="chk ${gone.includes(x) ? '' : 'on'}" data-act="app-toggle" data-arg="${esc(x)}"><span class="bx">${gone.includes(x) ? '' : I.check}</span>${esc(x)} ${esc(garment(x))}</button>`).join('')
-      + `<div class="sect">Add more items</div>` + (more.length ? more.map((x) => `<button class="chk add" data-act="app-add" data-arg="${esc(x)}"><span class="bx">${I.plus}</span>${esc(x)} ${esc(garment(x))}</button>`).join('') : `<p class="msg-body">No other items match this pickup.</p>`)
+    return sheet('Edit items', 'Tap an item to leave it out of this pickup.', all.map((x) => `<button class="chk ${gone.includes(x) ? '' : 'on'}" data-act="app-toggle" data-arg="${esc(x)}"><span class="bx">${gone.includes(x) ? '' : I.check}</span>${thumb(x)}${esc(x)} ${esc(garment(x))}</button>`).join('')
+      + `<div class="sect">Add more items</div>` + (more.length ? more.map((x) => `<button class="chk add" data-act="app-add" data-arg="${esc(x)}"><span class="bx">${I.plus}</span>${thumb(x)}${esc(x)} ${esc(garment(x))}</button>`).join('') : `<p class="msg-body">No other items match this pickup.</p>`)
       + `<button class="big" data-act="closesheet">Done</button>`); }
   if (st.sheet === 'app-who' && ap) return sheet('Who should decide?', 'The booking stays in the list until they answer.', who('app-send'), 'app-options');
   if (st.sheet === 'doc') { const p = F().pickups.find((x) => x.id === st.doc) || {}, pt = PARTNERS[p.partner] || {};
@@ -413,14 +440,14 @@ function render() {
   if (st.dragging) return;
   const strip = `<div class="demo-strip">Demo with sample data. Whatever you choose, the story continues the same way.<button data-act="restart">Restart</button></div>`;
   const sbar = `<div class="sbar" aria-hidden="true">9:41<span>${I.sig}${I.wifi}${I.batt}</span></div>`;
-  const body = st.screen === 'check' ? check() : st.screen === 'pickups' ? pickups() : st.screen === 'messages' ? messages() : st.screen === 'history' ? history() : home();
+  const body = st.screen === 'check' ? check() : st.screen === 'pickups' ? pickups() : st.screen === 'messages' ? messages() : st.screen === 'history' ? history() : st.screen === 'guide' ? guide() : home();
   document.getElementById('app').innerHTML = sbar + strip + `<div class="scroll">${body}</div>` + tabbar() + sheets() + (st.toast ? `<div class="toast" role="status">${esc(st.toast)}</div>` : '');
   bindSwipe();
 }
 
 function act(a, arg) {
   const rv = queue(pendRev())[0], ap = queue(pendApp())[0];
-  const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages', history: 'history' };
+  const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages', history: 'history', guide: 'guide' };
   if (go[a]) { st.screen = go[a]; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; return; }
   const pickRec = (status, tone, sub) => { const i = ap.input || {}; return { k: 'pickup', title: ROUTE[i.route] || i.route, sub: sub || `${(PARTNERS[i.partner_id] || {}).name || ''} · ${plural(itemsOf(ap).length, 'item')} · ${fmt(i.deadline)}`, status, tone }; };
   const labRec = (status, tone, sub) => ({ k: 'label', title: `${rv.item} ${garment(rv.item)}`.trim(), sub, status, tone });
