@@ -103,7 +103,11 @@ export async function handleUiEvent(d: Deps, input: unknown) {
 export function uiHeaders(req: Request) {
   const origin = req.headers.get('origin');
   const configured = process.env.TEXTILE_UI_ORIGIN;
-  if (origin && origin !== new URL(req.url).origin && origin !== configured) return null;
+  const url = new URL(req.url);
+  // Next's dev server can normalize req.url to localhost while preserving the browser's Host.
+  const host = req.headers.get('host');
+  const sameOrigin = host ? `${url.protocol}//${host}` : url.origin;
+  if (origin && origin !== sameOrigin && origin !== configured) return null;
   const headers = new Headers({ 'Cache-Control': 'no-store', Vary: 'Origin' });
   if (origin) {
     headers.set('Access-Control-Allow-Origin', origin);

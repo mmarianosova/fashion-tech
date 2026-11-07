@@ -31,3 +31,12 @@ test('agent snapshot maps to the team UI input keys without raw events', async (
   assert.ok(input.people.length > 0);
   assert.ok(!('events' in input));
 });
+
+test('bridge accepts the actual same-origin host when Next normalizes its request URL', async () => {
+  const { uiHeaders } = await import('../lib/ui-bridge.ts');
+  const request = (origin: string) => new Request('http://localhost:4318/events', {
+    headers: { host: '127.0.0.1:4318', origin },
+  });
+  assert.equal(uiHeaders(request('http://127.0.0.1:4318'))?.get('Access-Control-Allow-Origin'), 'http://127.0.0.1:4318');
+  assert.equal(uiHeaders(request('http://unrelated.example')), null);
+});
