@@ -83,6 +83,18 @@ test('rescheduling a pickup tells the agent no, then the next run proposes the i
   assert.equal((await db.all("SELECT state FROM approvals WHERE state='rescheduled'")).length, 1);
   assert.equal((await db.all('SELECT 1 FROM pickups')).length, 0);
   await assert.rejects(bridge.rescheduleApproval(deps, 'nope', '2026-11-21'), /unknown approval/);
+  const { handleTextileEvent, textileInputs } = await import('../lib/textile-flow.ts');
+  const [rescheduled] = await db.all("SELECT approval_id,input FROM approvals WHERE state='rescheduled'");
+  const update = { id: 'history-date', mode: 'live', type: 'approval.decision', decision: 'reschedule',
+    approval_id: rescheduled.approval_id, reopened: true, previous_deadline: '2026-11-21' };
+  const original = JSON.parse(rescheduled.input).deadline;
+  await assert.rejects(handleTextileEvent(deps, { ...update, deadline: '2026-11-06' }), /future/);
+  await handleTextileEvent(deps, { ...update, deadline: original });
+  assert.equal((await handleTextileEvent(deps, { ...update, deadline: original }) as any).already, true);
+  await assert.rejects(handleTextileEvent(deps, { ...update, deadline: '2026-11-18' }), /date changed/);
+  const snap = textileInputs(await app.snapshot());
+  assert.equal(snap.approvals.find((a) => a.id === rescheduled.approval_id)?.resched_to, original);
+  assert.ok(snap.alerts.some((a) => a.summary.includes('pickup rescheduled to ' + original)));
   const second = await app.startRun('disposition', {});
   await until(async () => {
     for (const a of await db.all("SELECT approval_id FROM approvals WHERE state='pending'")) await bridge.resolveApproval(deps, a.approval_id, true);
@@ -91,7 +103,7 @@ test('rescheduling a pickup tells the agent no, then the next run proposes the i
   const booked = await db.all('SELECT items,deadline FROM pickups');
   const hit = booked.find((b: any) => moved.items.every((k: string) => JSON.parse(b.items).includes(k)));
   assert.ok(hit, 'rescheduled items are proposed and booked again');
-  assert.equal(hit.deadline, '2026-11-21');
+  assert.equal(hit.deadline, original);
 });
 
 test('Textile Flow reads agent results and records review decisions without inventing pickups', async () => {

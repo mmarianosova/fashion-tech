@@ -204,13 +204,29 @@ export async function sendApprovalTo(d: Deps, approvalId: string, person: string
 
 /** Move a proposed pickup to a later hand-over date. The agent is told no (so it is not left waiting), the app remembers the new date,
  *  and the items are proposed again on the next Disposition run with that date. Not final: nothing is lost. */
-export async function rescheduleApproval(d: Deps, approvalId: string, deadline: string) {
-  if (!isCalendarDate(deadline)) throw new Error('deadline must be YYYY-MM-DD');
+export async function rescheduleApproval(d: Deps, approvalId: string, deadline: string,
+  { today = d.now().slice(0, 10), previous }: { today?: string; previous?: string } = {}) {
+  if (!isCalendarDate(deadline) || deadline < today) throw new Error('Choose today or a future handover date.');
   const a = (await d.db.all('SELECT * FROM approvals WHERE approval_id=?', [approvalId]))[0];
   if (!a) throw new Error('unknown approval');
-  if (a.state !== 'pending') return { already: true, state: a.state };
-  const input = p(a.input) ?? {};
-  if (input.deadline && deadline <= input.deadline) throw new Error('new date must be later than the current one');
+  if (a.state === 'rescheduled') {
+    if (a.resched_to === deadline) return { already: true, state: a.state, resched_to: deadline };
+    if (previous !== a.resched_to) throw new Error('The pickup date changed. Reopen it from History.');
+    const [changed] = await d.db.all(`UPDATE approvals SET resched_to=? WHERE approval_id=?
+      AND state='rescheduled' AND resched_to=? AND NOT EXISTS (
+        SELECT 1 FROM pickups b, json_each(b.items) item
+        WHERE item.value IN (SELECT value FROM json_each(json_extract(approvals.input,'$.items')))
+      ) AND NOT EXISTS (
+        SELECT 1 FROM approvals newer, json_each(json_extract(newer.input,'$.items')) item
+        WHERE newer.rowid>approvals.rowid AND item.value IN (
+          SELECT value FROM json_each(json_extract(approvals.input,'$.items'))
+        )
+      ) RETURNING resched_to`, [deadline, approvalId, previous]);
+    if (!changed) throw new Error('This pickup has changed. Open the latest proposal.');
+    return { already: false, state: a.state, resched_to: changed.resched_to };
+  }
+  if (a.state !== 'pending' || previous !== undefined) throw new Error('This pickup is no longer available to reschedule.');
+  if (p(a.input)?.deadline === deadline) throw new Error('Choose a different handover date.');
   const now = d.now();
   const claimed = await d.db.all("UPDATE approvals SET state='rescheduled',resched_to=?,decided_at=? WHERE approval_id=? AND state='pending' RETURNING state",
     [deadline, now, approvalId]);

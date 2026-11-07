@@ -123,4 +123,4 @@ Use **Export outputs** to inspect the interface events.
 The walkthrough includes fictional condition, location and due dates. Catalog-only
 material results stay out of Disposition until the physical inventory is recorded.
 The existing UI's **Change this** sends a sorting pile, so it cannot send corrected
-fibre percentages. Reopening finished decisions is unsupported by the backend. Keep the bridge on loopback or behind access control.
+fibre percentages. To revise a rescheduled pickup, open **History → Pickups → Change → Change date**. Choose a date or restore the original date. The new date is used on the next Disposition run. Other finished decisions cannot be changed from History. Keep the bridge on loopback or behind access control.

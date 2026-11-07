@@ -3,6 +3,9 @@ import { preparePickupEdit, type McpDeps } from './mcp.ts';
 import { p } from './db.ts';
 import { resolveReview, sendReviewTo, resolveApproval, rescheduleApproval, sendApprovalTo, type Deps } from './bridge.ts';
 
+const sameItems = (a?: string[], b?: string[]) =>
+  !!a?.length && !!b?.length && a.length === b.length && a.every((key) => b.includes(key));
+
 export function textileInputs(s: Awaited<ReturnType<typeof snapshot>>) {
   const keys = new Set(s.items.map((i) => i.item_key));
   const assigned = new Set([
@@ -18,13 +21,20 @@ export function textileInputs(s: Awaited<ReturnType<typeof snapshot>>) {
       id: r.review_id, item: r.item_key, label: r.label_text, proposed: r.proposed_tags,
       reason: r.reason, state: r.state,
     })),
-    approvals: s.approvals.map((a) => ({ id: a.approval_id, state: a.state, input: a.input,
+    approvals: s.approvals.map((a) => ({ id: a.approval_id, state: a.state, input: a.input, resched_to: a.resched_to,
       addable_items: s.pickupCandidates.filter((i) => keys.has(i.key) && i.route === a.input?.route && !assigned.has(i.key)).map((i) => i.key),
     })),
     pickups: s.pickups.map((p) => ({ id: p.booking_id, route: p.route, partner: p.partner_id,
       deadline: p.deadline, n: p.items?.length ?? 0, items: p.items, lots: p.lots })),
-    alerts: s.alerts.map((a) => ({ id: a.alert_id, type: a.type, summary: a.summary, items: a.items,
-      deadline: a.deadline, next: a.next_step, ref: a.ref_kind, from: a.from_name, read: !!a.is_read })),
+    alerts: s.alerts.map((a) => {
+      const moved = a.type === 'review_waiting' && / pickup rescheduled to \d{4}-\d{2}-\d{2}$/.test(a.summary)
+        ? s.approvals.find((p) => p.state === 'rescheduled' && p.resched_to && sameItems(p.input?.items, a.items))
+        : undefined;
+      return { id: a.alert_id, type: a.type, items: a.items, ref: a.ref_kind, from: a.from_name, read: !!a.is_read,
+        summary: moved ? a.summary.replace(/\d{4}-\d{2}-\d{2}$/, moved.resched_to) : a.summary,
+        deadline: moved?.resched_to ?? a.deadline,
+        next: moved ? `Moved to ${moved.resched_to}. It will be proposed again on the next run.` : a.next_step };
+    }),
     partners: Object.fromEntries(s.recyclers.map((r) => [r.id, { name: r.name, address: r.address }])),
     people: s.people.map((person) => person.name),
   };
@@ -38,7 +48,7 @@ const required = (value: unknown) => {
 export async function handleTextileEvent(d: Deps, event: Record<string, unknown>, mcp?: McpDeps) {
   required(event.id);
   if (event.mode !== 'live') throw new Error('Only live events can change the test batch.');
-  if (event.reopened) throw new Error('Completed decisions cannot be reopened by the agent backend.');
+  if (event.reopened && !(event.type === 'approval.decision' && event.decision === 'reschedule')) throw new Error('Completed decisions cannot be reopened by the agent backend.');
   switch (event.type) {
     case 'review.decision': {
       const id = required(event.review_id);
@@ -60,7 +70,9 @@ export async function handleTextileEvent(d: Deps, event: Record<string, unknown>
       return sendReviewTo(d, required(event.review_id), required(event.to));
     case 'approval.decision': {
       const id = required(event.approval_id);
-      if (event.decision === 'reschedule') return rescheduleApproval(d, id, required(event.deadline));
+      if (event.decision === 'reschedule') return rescheduleApproval(d, id, required(event.deadline), {
+        today: mcp?.today, previous: event.reopened ? required(event.previous_deadline) : undefined,
+      });
       if (event.decision === 'deny') return resolveApproval(d, id, false);
       if (event.decision === 'allow') {
         if (event.items === undefined) {

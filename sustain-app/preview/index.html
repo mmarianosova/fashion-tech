@@ -331,9 +331,9 @@ function play() {
   }, 420);
 }
 // A person decided the current item: the run moves on.
-function decided(msg, rec) {
-  if (rec && rec.ev) emit({ ...rec.ev, ...(st.reopen ? { reopened: true } : {}) });
-  if (st.reopen) { st.edit[st.reopen.rec.id] = { status: rec.status, tone: rec.tone, sub: rec.sub }; st.reopen = null; st.screen = 'history'; st.exit = null; st.sheet = null; say(msg); render(); return; }
+function decided(msg, rec, emitDecision = true) {
+  if (emitDecision && rec && rec.ev) emit({ ...rec.ev, ...(st.reopen ? { reopened: true } : {}) });
+  if (st.reopen) { st.edit[st.reopen.rec.id] = { status: rec.status, tone: rec.tone, sub: rec.sub, app: rec.app }; st.reopen = null; st.screen = 'history'; st.exit = null; st.sheet = null; say(msg); render(); return; }
   if (rec) st.hist.unshift(rec);
   if (st.mode === 'live') { if (rec && rec.src) { rec.src.state = 'decided'; rec.src._t = Date.now(); } st.exit = null; st.sheet = null; say(msg); render(); return; }
   st.fi = Math.min(st.fi + 1, FRAMES.length - 1); st.exit = null; st.sheet = null; say(msg); play(); render(); }
@@ -395,15 +395,16 @@ function pickups() {
   if (!t && st.timer) return head + `<main class="page">${done('<span class="spin"></span>', 'Looking for items that are due', 'Pickups to review appear here.')}</main>`;
   if (!t && !booked.length) return head + `<main class="page">${done(I.check, 'Nothing to review', 'When items are due to leave, their pickups show up here.')}</main>`;
   if (!t) return head + `<main class="page"><div class="count">${plural(booked.length, 'pickup')} booked</div>${booked.map((p) => `<div class="note">${tile(ROUTE_MAT[p.route])}<div><h4>${ROUTE[p.route] || p.route}</h4><p>${esc((PARTNERS[p.partner] || {}).name)}</p><p class="nx">Hand over by ${fmt(p.deadline)} · ${plural(p.n, 'item')}</p><button class="alt" style="margin-top:8px;min-height:44px;padding:8px 16px" data-act="doc" data-arg="${esc(p.id)}">Open pickup request</button></div></div>`).join('')}</main>`;
+  const changingDate = reA && st.reopen.rec.status === 'Rescheduled';
   const i = t.input || {}, p = PARTNERS[i.partner_id] || {}, who = st.sent[t.id], ni = n && n.input ? n.input : null;
   return head + `<main class="page"><div class="pick">
     <div class="head"><b>${esc(ROUTE[i.route] || i.route)}</b><span class="chip-gate" style="margin-left:0">${reA ? esc(st.reopen.rec.status) : who ? 'With ' + esc(who) : 'To review'}</span></div>
     <div class="matrow">${tile(ROUTE_MAT[i.route])}<div><b>${esc((MAT[matKey(ROUTE_MAT[i.route])] || {}).name)}</b><span class="d">${esc((MAT[matKey(ROUTE_MAT[i.route])] || {}).desc)}</span></div></div>
     <div class="when"><div class="cal"><span>${mon(i.deadline)}</span><strong>${dom(i.deadline)}</strong></div><div><div class="k">Hand over by</div><div class="who">${esc(p.name || i.partner_id)}</div><div class="addr">${I.pin}${esc(p.address || '')}</div></div></div>
-    <div><div class="k-row"><span class="k">Items ${itemsOf(t).length}</span><button class="editlink" data-act="app-edit">${I.wrench}Edit items</button></div><div class="ids">${ids(itemsOf(t))}</div></div>
-    <div class="actions"><button class="btn-yes" data-act="yes">Book pickup</button>
+    <div><div class="k-row"><span class="k">Items ${itemsOf(t).length}</span>${changingDate ? '' : `<button class="editlink" data-act="app-edit">${I.wrench}Edit items</button>`}</div><div class="ids">${ids(itemsOf(t))}</div></div>
+    <div class="actions">${changingDate ? `<button class="btn-alt" data-act="app-date">Change date</button>` : `<button class="btn-yes" data-act="yes">Book pickup</button>
     <div class="duo"><button class="btn-alt" data-act="app-date">Reschedule</button><button class="btn-no" data-act="app-deny">Don’t book</button></div>
-    <button class="link" data-act="app-options">More options</button></div></div>
+    <button class="link" data-act="app-options">More options</button>`}</div></div>
     ${ni ? `<div class="upnext"><span style="flex:1"><span class="k">Up next</span><b>${esc(ROUTE[ni.route] || ni.route)} · ${plural((ni.items || []).length, 'item')}</b><small>${esc((PARTNERS[ni.partner_id] || {}).name || '')}</small></span><span style="color:var(--mute);display:flex">${I.chev}</span></div>` : ''}</main>`;
 }
 function messages() {
@@ -415,9 +416,20 @@ function messages() {
 const msgTitle = (a) => (a.type === 'reply' && a.from ? a.from + ' replied' : TITLE[a.type] || 'Message');
 const msgTarget = (a) => (a.type === 'rescheduled' ? ['pickups', 'Verify or change'] : null) ||  (a.ref === 'review' ? ['check', 'Go to Items to review'] : a.ref === 'approval' ? ['pickups', 'Go to Pickups to review'] : a.type === 'review_waiting' ? ['check', 'Go to Items to review'] : a.type === 'donate_recycle_due' ? ['pickups', 'Go to Pickups'] : null);
 
+function historyRecords() {
+  const saved = F().approvals.filter((a) => a.state === 'rescheduled' && a.resched_to).map((a) => {
+    const i = a.input || {};
+    return { id: 'pickup-' + a.id, k: 'pickup', title: ROUTE[i.route] || i.route, status: 'Rescheduled', tone: 'book',
+      sub: `${(PARTNERS[i.partner_id] || {}).name || ''} · New date ${fmt(a.resched_to)}`,
+      app: { ...a, originalDeadline: i.deadline, input: { ...i, deadline: a.resched_to } } };
+  });
+  const ids = new Set(saved.map((h) => h.id));
+  return [...saved, ...st.hist.filter((h) => !ids.has(h.id)), ...seeds()]
+    .map((h) => ids.has(h.id) ? h : ({ ...h, ...(st.edit[h.id] || {}) }));
+}
 function history() {
   const seenAlerts = alerts().filter((a) => st.seen[a.id]).map((a) => ({ k: 'alert', id: a.id, title: msgTitle(a), sub: a.summary, status: 'Seen', tone: 'seen' }));
-  const all = [...st.hist, ...seeds()].map((h) => ({ ...h, ...(st.edit[h.id] || {}) }));
+  const all = historyRecords();
   const labels = all.filter((h) => h.k === 'label'), picks = all.filter((h) => h.k === 'pickup'), f = st.hf;
   const row = (h, ic, act, word) => `<div class="hrow"><span class="ic">${ic}</span><span class="t"><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span><span class="r"><span class="st st-${h.tone}">${esc(h.status)}</span><button class="chg" data-act="${act}" data-arg="${esc(h.id || '')}">${word}</button></span></div>`;
   const grp = (title, rows) => `<div class="hgroup"><div class="sect">${title}</div><div class="hlist">${rows}</div></div>`;
@@ -438,7 +450,16 @@ function sheets() {
   if (st.sheet === 'rev-fix' && rv) return sheet('Which pile is it?', rv.item + ' — ' + (rv.label || 'no label text'), Object.entries(PILE).map(([k, v]) => opt(I.label, v[0], v[1], 'rev-pile', k === 'trash' ? 'bad' : '', v[0])).join(''));
   if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the list until they answer.', who('rev-send'), 'rev-options');
   if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), (st.reopen ? '' : opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn')) + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Don’t book it', 'The items come back on the next run.', 'app-deny', 'bad'));
-  if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The pickup is proposed again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', addDays(ap.input.deadline, n))).join(''), 'app-options');
+  if (st.sheet === 'app-date' && ap) {
+    const date = ap.input.deadline, original = ap.originalDeadline;
+    const options = [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(date, n)), n + ' days later', 'app-resched', '', addDays(date, n))).join('');
+    const undo = original && original !== date && original >= F().today
+      ? opt(I.calendar, fmt(original), 'Restore original date', 'app-resched', '', original) : '';
+    const custom = `<label class="msg-body" for="pickup-date">Choose any date</label>
+      <input id="pickup-date" type="date" min="${esc(F().today)}" value="${esc(date)}" style="display:block;width:100%;min-height:44px;margin:8px 0 12px">
+      <button class="big" data-act="app-date-save">Save date</button>`;
+    return sheet('Pick a new date', 'Current handover date: ' + fmt(date), undo + options + custom);
+  }
   if (st.sheet === 'app-edit' && ap) { const all = baseItems(ap), gone = st.removed[ap.id] || [], more = addable(ap);
     return sheet('Edit items', 'Tap an item to leave it out of this pickup.', all.map((x) => `<button class="chk ${gone.includes(x) ? '' : 'on'}" data-act="app-toggle" data-arg="${esc(x)}"><span class="bx">${gone.includes(x) ? '' : I.check}</span>${thumb(x)}${esc(x)} ${esc(garment(x))}</button>`).join('')
       + `<div class="sect">Add more items</div>` + (more.length ? more.map((x) => `<button class="chk add" data-act="app-add" data-arg="${esc(x)}"><span class="bx">${I.plus}</span>${thumb(x)}${esc(x)} ${esc(garment(x))}</button>`).join('') : `<p class="msg-body">No other items match this pickup.</p>`)
@@ -460,7 +481,7 @@ function render() {
   bindSwipe();
 }
 
-function act(a, arg) {
+async function act(a, arg) {
   const rv = curRev(), ap = curApp();
   const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages', history: 'history', guide: 'guide' };
   if (go[a]) { st.reopen = null; st.screen = go[a]; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; return; }
@@ -473,7 +494,7 @@ function act(a, arg) {
     case 'demo': setMode('demo'); break;
     case 'export': exportOutputs(); break;
     case 'hist-back': st.reopen = null; st.sheet = null; st.screen = 'history'; render(); break;
-    case 'change': { const rec = [...st.hist, ...seeds()].find((h) => h.id === arg); if (!rec) break; st.reopen = { rec, rev: rec.rev, app: rec.app }; st.screen = rec.k === 'label' ? 'check' : 'pickups'; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; break; }
+    case 'change': { const rec = historyRecords().find((h) => h.id === arg); if (!rec) break; st.reopen = { rec, rev: rec.rev, app: rec.app }; st.screen = rec.k === 'label' ? 'check' : 'pickups'; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; break; }
     case 'app-edit': st.sheet = 'app-edit'; render(); break;
     case 'app-add': (st.added[ap.id] = st.added[ap.id] || []).push(arg); render(); break;
     case 'app-toggle': { const g = st.removed[ap.id] || []; st.removed[ap.id] = g.includes(arg) ? g.filter((x) => x !== arg) : [...g, arg]; if (st.removed[ap.id].length >= baseItems(ap).length) st.removed[ap.id] = g; render(); break; }
@@ -489,7 +510,36 @@ function act(a, arg) {
     case 'rev-pile': decided('Saved as ' + arg.toLowerCase() + '.', labRec('Changed', 'book', arg, { decision: 'edit', tags: { ...(rv.proposed || {}), stream: Object.keys(PILE).find((k) => PILE[k][0] === arg) } })); break;
     case 'rev-remove': decided('Taken out of the batch.', labRec('Removed', 'no', 'Taken out of the batch', { decision: 'reject' })); break;
     case 'app-deny': decided('Not booked. It can come back on the next run.', pickRec('Not booked', 'no', undefined, { decision: 'deny' })); break;
-    case 'app-resched': decided('Moved to ' + fmt(arg) + '.', pickRec('Rescheduled', 'book', `${(PARTNERS[ap.input.partner_id] || {}).name || ''} · New date ${fmt(arg)}`, { decision: 'reschedule', deadline: arg })); break;
+    case 'app-date-save':
+    case 'app-resched': {
+      if (st.savingDate) break;
+      const date = a === 'app-date-save' ? document.getElementById('pickup-date')?.value : arg;
+      if (!date || date < F().today || date === ap.input.deadline) { say('Choose a different date, today or later.'); break; }
+      const reopened = !!st.reopen;
+      const rec = pickRec('Rescheduled', 'book', `${(PARTNERS[ap.input.partner_id] || {}).name || ''} · New date ${fmt(date)}`,
+        { decision: 'reschedule', deadline: date, ...(reopened ? { reopened: true, previous_deadline: ap.input.deadline } : {}) });
+      rec.id = 'pickup-' + ap.id;
+      rec.app.originalDeadline = ap.originalDeadline || ap.input.deadline;
+      rec.app.input.deadline = date;
+      if (st.mode === 'live' && CFG.api) {
+        st.savingDate = true;
+        try {
+          await deliver(emit(rec.ev, false), true);
+          const approval = F().approvals.find((entry) => entry.id === ap.id);
+          if (approval) { approval.state = 'rescheduled'; approval.resched_to = date; }
+          decided('Moved to ' + fmt(date) + '.', rec, false);
+          if (approval) approval.state = 'rescheduled';
+          render();
+          void pull();
+        } catch (error) {
+          say(error.message || 'Could not save the date.');
+          render();
+        } finally { st.savingDate = false; }
+      } else {
+        decided('Moved to ' + fmt(date) + '.', rec);
+      }
+      break;
+    }
     case 'rev-send': case 'app-send': { const t = a === 'rev-send' ? rv : ap; st.sent[t.id] = arg; st.sheet = null;
       // The manager does not see his own outgoing message. A made-up reply (demo) arrives a few seconds later.
       const kind = a === 'rev-send' ? 'review' : 'approval', mid = 'reply-' + t.id + arg;
@@ -527,9 +577,9 @@ let EVN = 0, pollTimer = null, lastPull = '';
 const DEMO_P = JSON.stringify(PARTNERS), DEMO_PPL = [...PEOPLE], DEMO_ITEM = { ...ITEM };
 
 // Outputs: one event per person decision. Bodies match the Next app's API (reviews / approvals / alerts) so a backend can reuse them.
-function emit(ev) {
+function emit(ev, send = true) {
   const e = { id: 'ev-' + Date.now().toString(36) + (++EVN), at: new Date().toISOString(), mode: st.mode, ...ev };
-  if (st.mode === 'live') { OUT.push(e); try { localStorage.setItem('tf.outputs', JSON.stringify(OUT.slice(-500))); } catch (x) {} deliver(e); }
+  if (st.mode === 'live') { OUT.push(e); try { localStorage.setItem('tf.outputs', JSON.stringify(OUT.slice(-500))); } catch (x) {} if (send) deliver(e); }
   try { window.dispatchEvent(new CustomEvent('tf:output', { detail: e })); } catch (x) {}
   try { const tgt = window.parent !== window ? window.parent : window.opener; if (tgt && CFG.origin) tgt.postMessage({ type: 'tf:output', event: e }, CFG.origin); } catch (x) {}
   return e;
@@ -537,17 +587,19 @@ function emit(ev) {
 function nextRequest(e) {
   if (e.type === 'review.decision') return ['/api/reviews/' + e.review_id, e.decision === 'edit' ? { decision: 'edit', tags: e.tags } : { decision: e.decision }];
   if (e.type === 'review.send') return ['/api/reviews/' + e.review_id, { decision: 'send', to: e.to }];
-  if (e.type === 'approval.decision') return ['/api/approvals/' + e.approval_id, e.decision === 'reschedule' ? { reschedule: { deadline: e.deadline } } : { allow: e.decision === 'allow' }];
+  if (e.type === 'approval.decision') return ['/api/approvals/' + e.approval_id, e.decision === 'reschedule' ? { reschedule: { deadline: e.deadline, previous: e.previous_deadline } } : { allow: e.decision === 'allow' }];
   if (e.type === 'approval.send') return ['/api/approvals/' + e.approval_id, { send: { to: e.to } }];
   if (e.type === 'alert.read') return ['/api/alerts/read', { id: e.alert_id }];
   return null;
 }
-function deliver(e) {
+function deliver(e, propagate = false) {
   if (!CFG.api) return;
   let url = CFG.api + '/events', body = e;
   if (CFG.adapter === 'next') { const m = nextRequest(e); if (!m) return; url = CFG.api + m[0]; body = m[1]; }
-  fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-    .then((r) => { if (!r.ok) throw new Error(r.status); }).catch(() => { st.conn = 'send failed, kept locally'; render(); });
+  return fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    .then(async (r) => {
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error || 'Could not save the decision.');
+    }).catch((error) => { if (propagate) throw error; st.conn = 'send failed, kept locally'; render(); });
 }
 function exportOutputs() {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(OUT, null, 2)], { type: 'application/json' }));
@@ -580,11 +632,12 @@ function fromNext(s) {
   return { today: s.today, partners: Object.fromEntries((s.recyclers || []).map((r) => [r.id, { name: (r.name || '').replace(' (fictional)', ''), address: r.address }])), people: (s.people || []).map((p) => p.name),
     items: (s.items || []).map((i) => ({ key: i.item_key, garment: i.garment_type, color: i.color, label: i.label_text, state: i.state, stream: i.stream, fibre: i.fibre_type, color_group: i.color_group, confidence: i.confidence, condition: i.condition })),
     reviews: (s.reviews || []).map((r) => ({ id: r.review_id, item: r.item_key, label: r.label_text, proposed: r.proposed_tags, reason: r.reason, state: r.state })),
-    approvals: (s.approvals || []).map((a) => ({ id: a.approval_id, state: a.state, input: a.input })),
+    approvals: (s.approvals || []).map((a) => ({ id: a.approval_id, state: a.state, input: a.input, resched_to: a.resched_to })),
     pickups: (s.pickups || []).map((p) => ({ id: p.booking_id, route: p.route, partner: p.partner_id, deadline: p.deadline, n: (p.items || []).length, items: p.items, lots: p.lots })),
     alerts: (s.alerts || []).map((a) => ({ id: a.alert_id, type: a.type, summary: a.summary, items: a.items, deadline: a.deadline, next: a.next_step, ref: a.ref_kind, from: a.from_name, read: !!a.is_read })) };
 }
 async function pull() {
+  if (st.sheet === 'app-date') return;
   try { const r = await fetch(CFG.api + (CFG.adapter === 'next' ? '/api/state' : '/inputs'), { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
     let j = await r.json(); if (CFG.adapter === 'next') j = fromNext(j); const key = JSON.stringify(j); st.conn = 'connected';
     if (key !== lastPull) { lastPull = key; push(j); } else render();
