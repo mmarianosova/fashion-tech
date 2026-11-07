@@ -24,8 +24,9 @@ export default function History() {
   const alerts = snap.alerts.filter((a: any) => a.is_read);
   const partner = (id: string) => snap.recyclers.find((r: any) => r.id === id)?.name?.replace(' (fictional)', '') ?? '';
   const Row = ({ ic, t, st, tone, sub, href, word, onClick }: any) => (
-    <div className="hrow"><span className="ic">{ic}</span><span className="t"><b>{t}</b><span className={`st st-${tone}`}>{st}</span><small>{sub}</small></span>
-      {href ? <Link className="chg" href={href} style={{ display: 'grid', placeItems: 'center' }}>{word}</Link> : <button className="chg" onClick={onClick}>{word}</button>}</div>);
+    <div className="hrow"><span className="ic">{ic}</span><span className="t"><b>{t}</b><small>{sub}</small></span>
+      <span className="r"><span className={`st st-${tone}`}>{st}</span>
+        {href ? <Link className="chg" href={href}>{word}</Link> : <button className="chg" onClick={onClick}>{word}</button>}</span></div>);
   const Group = ({ title, children, empty }: any) => (<div className="hgroup"><div className="sect">{title}</div><div className="hlist">{children ?? <div className="hrow"><span className="t"><small>{empty}</small></span></div>}</div></div>);
   const Chip = ({ k, t }: { k: Filter; t: string }) => <button className={f === k ? 'on' : ''} onClick={() => setF(k)}>{t}</button>;
   const show = (k: Filter) => f === 'all' || f === k;

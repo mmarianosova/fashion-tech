@@ -158,9 +158,10 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offse
 .hrow{display:flex;align-items:center;gap:12px;min-height:64px;padding:8px 8px 8px 14px;border-bottom:1px solid var(--line)}
 .hrow:last-child{border-bottom:0}
 .hrow .ic{width:36px;height:36px;border-radius:12px;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;flex:none}.hrow .ic svg{width:18px;height:18px}
-.hrow .t{flex:1;min-width:0}.hrow .t b{font-size:.875rem;font-weight:700;margin-right:8px}.hrow .t small{display:block;font-size:.75rem;color:var(--mute);line-height:1.3;margin-top:2px}
-.hrow .chg{min-width:60px;min-height:44px;padding:0 8px;background:transparent;color:var(--blue);border:0;border-radius:12px;font-size:.8125rem}
-.st{display:inline-block;font-size:.75rem;font-weight:700;border-radius:999px;padding:3px 9px;vertical-align:1px}
+.hrow .t{flex:1;min-width:0}.hrow .t b{display:block;font-size:.875rem;line-height:20px;font-weight:700}.hrow .t small{display:block;font-size:.75rem;color:var(--mute);line-height:1.3;margin-top:2px}
+.hrow .r{width:84px;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px}
+.hrow .chg{width:84px;min-height:36px;display:grid;place-items:center;padding:0;background:transparent;color:var(--blue);border:0;border-radius:12px;font-size:.8125rem}
+.st{display:inline-block;font-size:.75rem;font-weight:700;border-radius:999px;padding:3px 10px}
 .st-ok{background:var(--green-soft);color:var(--green)}.st-book{background:var(--blue-soft);color:var(--blue-ink)}.st-no{background:var(--red-soft);color:var(--red)}.st-seen{background:#e8eef5;color:var(--mute)}
 
 /* floating pill tab bar */
@@ -221,6 +222,12 @@ button.note.tap{width:100%;text-align:left;font:inherit;font-weight:400;color:in
 .note .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .msg-body{font-size:1rem;line-height:1.45;margin:8px 0;color:var(--ink)}.msg-body.nx{font-weight:700}
 .big-link{border:0;width:100%;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;margin-top:12px;font-weight:700;text-decoration:none;background:var(--blue);color:#fff;padding:14px;border-radius:26px;font-size:1rem}
+
+.scroll{flex:1;min-width:0}
+
+.editlink{display:flex;align-items:center;gap:6px;min-height:44px;padding:0 4px 0 12px;background:transparent;color:var(--blue);border:0;font-size:.8125rem;font-weight:700}.editlink svg{width:16px;height:16px}
+.k-row{display:flex;align-items:center;justify-content:space-between;height:28px;margin-bottom:6px}
+.chk{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 14px;background:#fff;border:2px solid var(--line);border-radius:16px;color:var(--ink);font-weight:700;margin-bottom:8px}.chk.on{border-color:var(--blue-line);background:var(--blue-soft);color:var(--blue)}.chk .bx{width:22px;height:22px;border-radius:7px;border:2px solid var(--mute);display:grid;place-items:center;flex:none}.chk.on .bx{background:var(--blue);border-color:var(--blue);color:#fff}.chk .bx svg{width:14px;height:14px}
 </style></head>
 <body class="demo"><div class="app" id="app"></div>
 <script>
@@ -244,8 +251,8 @@ const I = { back: S('<path d="M15 6l-6 6 6 6"/>'), check: S('<path d="M5 12l5 5L
   batt: '<svg width="26" height="12" viewBox="0 0 26 12" aria-hidden="true"><rect x="0.5" y="0.5" width="22" height="11" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="19" height="8" rx="2" fill="currentColor"/><rect x="24" y="4" width="1.6" height="4" rx="0.8" fill="currentColor" opacity=".4"/></svg>' };
 const PILE = { shred: ['Shred pile', 'mostly natural fibres, like cotton'], denim: ['Denim pile', 'jeans and denim'], mixed: ['Mixed pile', 'mixed or man-made fabric'], trash: ['Throw away', 'cannot be reused'] };
 const ROUTE = { donate: 'Donation', recycle_shred: 'Fabric shredding', recycle_denim: 'Denim recycling', recycle_mixed: 'Mixed fabric recycling', dispose: 'Disposal' };
-const TITLE = { reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Item to review', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
-const TAG = { reply: 'REPLY', donate_recycle_due: 'PICKUP', review_waiting: 'REVIEW' };
+const TITLE = { rescheduled: 'Pickup rescheduled', reply: 'Reply', donate_recycle_due: 'Pickup ready', review_waiting: 'Item to review', dispute_deadline: 'Deadline coming', delay_risk: 'Possible delay', question: 'A question for you' };
+const TAG = { rescheduled: 'PICKUP', reply: 'REPLY', donate_recycle_due: 'PICKUP', review_waiting: 'REVIEW' };
 const ITEM = Object.fromEntries(FRAMES[0].items.map((i) => [i[0], { garment: i[1], color: i[2] }]));
 const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmt = (d) => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '');
@@ -267,11 +274,15 @@ const SEED = [
   { k: 'pickup', title: 'Fabric shredding', sub: `${firstPartner.name || 'Recycler'} · Hand over by ${fmt(addDays(FRAMES[0].today, 3))}`, status: 'Booked', tone: 'book' },
 ];
 
-const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [], hist: [], hf: 'all' };
+const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [], hist: [], hf: 'all', removed: {} };
 const F = () => FRAMES[st.fi];
 const pendRev = () => F().reviews.filter((r) => r.state === 'pending');
 const pendApp = () => F().approvals.filter((a) => a.state === 'pending');
-const alerts = () => [...st.msgs, ...F().alerts];
+// Demo notice: a pickup nobody confirmed is moved to a later date, and the person is told so.
+const notice = () => { const a = pendApp()[0]; if (!a || !a.input) return []; const i = a.input;
+  return [{ id: 'resched-' + a.id, type: 'rescheduled', ref: 'approval', items: i.items || [], summary: `No action was taken on ${ROUTE[i.route] || i.route} (${plural((i.items || []).length, 'item')}), so it was rescheduled to ${fmt(addDays(i.deadline, 7))}. Verify it or change it.`, next: 'Open it in Pickups to review and choose Book pickup, Reschedule or Don’t book.' }]; };
+const alerts = () => [...notice(), ...st.msgs, ...F().alerts];
+const itemsOf = (a) => ((a.input && a.input.items) || []).filter((x) => !(st.removed[a.id] || []).includes(x));
 const unread = () => alerts().filter((a) => !st.seen[a.id]).length;
 
 function stopPlay() { clearInterval(st.timer); st.timer = null; }
@@ -297,7 +308,7 @@ const queue = (list) => [...list].sort((a, b) => Number(!!st.sent[a.id]) - Numbe
 
 function tabbar() {
   const t = (act, ic, label, on, pip) => `<a href="#" role="button" data-act="${act}" aria-label="${label}"${on ? ' aria-current="page"' : ''} class="${on ? 'on' : ''}">${ic}${on ? label : ''}${pip && !on ? '<i class="pip"></i>' : ''}</a>`;
-  return `<nav class="tabbar" aria-label="Main">${t('home', I.home, 'Home', st.screen === 'home')}${t('check', I.label, 'Labels', st.screen === 'check', pendRev().length)}${t('pickups', I.truck, 'Pickups', st.screen === 'pickups', pendApp().length)}${t('messages', I.bell, 'Messages', st.screen === 'messages', unread())}</nav>`;
+  return `<nav class="tabbar" aria-label="Main">${t('home', I.home, 'Home', st.screen === 'home')}${t('check', I.label, 'Labels', st.screen === 'check', pendRev().length)}${t('pickups', I.truck, 'Pickups', st.screen === 'pickups', pendApp().length)}${t('messages', I.bell, 'Messages', st.screen === 'messages', unread())}${t('history', I.clock, 'History', st.screen === 'history')}</nav>`;
 }
 const brow = (act, ic, t, d) => `<button data-act="${act}"><span class="bi">${ic}</span><span><b>${t}</b><span class="d">${d}</span></span><span class="go">${I.chev}</span></button>`;
 
@@ -346,7 +357,7 @@ function pickups() {
   return head + `<main class="page"><div class="pick">
     <div class="head"><b>${esc(ROUTE[i.route] || i.route)}</b><span class="chip-gate" style="margin-left:0">${who ? 'With ' + esc(who) : 'To review'}</span></div>
     <div class="when"><div class="cal"><span>${mon(i.deadline)}</span><strong>${dom(i.deadline)}</strong></div><div><div class="k">Hand over by</div><div class="who">${esc(p.name || i.partner_id)}</div><div class="addr">${I.pin}${esc(p.address || '')}</div></div></div>
-    <div><div class="k" style="margin-bottom:6px">Items ${(i.items || []).length}</div><div class="ids">${ids(i.items)}</div></div>
+    <div><div class="k-row"><span class="k">Items ${itemsOf(t).length}</span><button class="editlink" data-act="app-edit">${I.wrench}Edit items</button></div><div class="ids">${ids(itemsOf(t))}</div></div>
     <div class="actions"><button class="btn-yes" data-act="yes">Book pickup</button>
     <div class="duo"><button class="btn-alt" data-act="app-date">Reschedule</button><button class="btn-no" data-act="app-deny">Don’t book</button></div>
     <button class="link" data-act="app-options">More options</button></div></div>
@@ -354,18 +365,18 @@ function pickups() {
 }
 function messages() {
   const list = alerts(), head = topbar('Messages', 'What is due and what to do.');
-  const ic = (t) => (t === 'reply' ? I.person : t === 'donate_recycle_due' ? I.truck : t === 'review_waiting' ? I.label : I.flag);
+  const ic = (t) => (t === 'reply' ? I.person : (t === 'donate_recycle_due' || t === 'rescheduled') ? I.truck : t === 'review_waiting' ? I.label : I.flag);
   if (!list.length) return head + `<main class="page">${done(I.bell, 'No messages', 'Updates and replies show up here.')}</main>`;
   return head + `<main class="page">${list.map((a) => `<button class="note tap ${st.seen[a.id] ? '' : 'unread'}" data-act="msgopen" data-arg="${esc(a.id)}"><div class="note-ico">${ic(a.type)}</div><div><h4>${esc(msgTitle(a))}</h4><p class="clamp">${esc(a.summary)}</p><span class="tag">${TAG[a.type] || 'ALERT'}</span></div></button>`).join('')}</main>`;
 }
 const msgTitle = (a) => (a.type === 'reply' && a.from ? a.from + ' replied' : TITLE[a.type] || 'Message');
-const msgTarget = (a) => (a.ref === 'review' ? ['check', 'Go to Items to review'] : a.ref === 'approval' ? ['pickups', 'Go to Pickups to review'] : a.type === 'review_waiting' ? ['check', 'Go to Items to review'] : a.type === 'donate_recycle_due' ? ['pickups', 'Go to Pickups'] : null);
+const msgTarget = (a) => (a.type === 'rescheduled' ? ['pickups', 'Verify or change'] : null) ||  (a.ref === 'review' ? ['check', 'Go to Items to review'] : a.ref === 'approval' ? ['pickups', 'Go to Pickups to review'] : a.type === 'review_waiting' ? ['check', 'Go to Items to review'] : a.type === 'donate_recycle_due' ? ['pickups', 'Go to Pickups'] : null);
 
 function history() {
   const seenAlerts = alerts().filter((a) => st.seen[a.id]).map((a) => ({ k: 'alert', id: a.id, title: msgTitle(a), sub: a.summary, status: 'Seen', tone: 'seen' }));
   const all = [...st.hist, ...SEED];
   const labels = all.filter((h) => h.k === 'label'), picks = all.filter((h) => h.k === 'pickup'), f = st.hf;
-  const row = (h, ic, act, word) => `<div class="hrow"><span class="ic">${ic}</span><span class="t"><b>${esc(h.title)}</b><span class="st st-${h.tone}">${esc(h.status)}</span><small>${esc(h.sub)}</small></span><button class="chg" data-act="${act}" data-arg="${esc(h.id || '')}">${word}</button></div>`;
+  const row = (h, ic, act, word) => `<div class="hrow"><span class="ic">${ic}</span><span class="t"><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span><span class="r"><span class="st st-${h.tone}">${esc(h.status)}</span><button class="chg" data-act="${act}" data-arg="${esc(h.id || '')}">${word}</button></span></div>`;
   const grp = (title, rows) => `<div class="hgroup"><div class="sect">${title}</div><div class="hlist">${rows}</div></div>`;
   const chip = (k, t) => `<button class="${f === k ? 'on' : ''}" data-act="hf" data-arg="${k}">${t}</button>`;
   return topbar('History', 'Everything you have decided. Tap Change to look at it again.') + `<main class="page"><div class="chips">${chip('all', 'All')}${chip('labels', 'Labels')}${chip('pickups', 'Pickups')}${chip('alerts', 'Alerts')}</div>
@@ -382,6 +393,8 @@ function sheets() {
   if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the list until they answer.', who('rev-send'), 'rev-options');
   if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Don’t book it', 'The items come back on the next run.', 'app-deny', 'bad'));
   if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The pickup is proposed again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
+  if (st.sheet === 'app-edit' && ap) { const all = (ap.input && ap.input.items) || [], gone = st.removed[ap.id] || [];
+    return sheet('Edit items', 'Tap an item to leave it out of this pickup.', all.map((x) => `<button class="chk ${gone.includes(x) ? '' : 'on'}" data-act="app-toggle" data-arg="${esc(x)}"><span class="bx">${gone.includes(x) ? '' : I.check}</span>${esc(x)} ${esc(garment(x))}</button>`).join('') + `<button class="big" data-act="closesheet">Done</button>`); }
   if (st.sheet === 'app-who' && ap) return sheet('Who should decide?', 'The booking stays in the list until they answer.', who('app-send'), 'app-options');
   if (st.sheet === 'doc') { const p = F().pickups.find((x) => x.id === st.doc) || {}, pt = PARTNERS[p.partner] || {};
     return sheet('Pickup request', '', `<div class="reqdoc"><h4>Pickup request ${esc(p.id)}</h4><p><b>Collector:</b> ${esc(pt.name)}, ${esc(pt.address)}</p><p><b>Type:</b> ${ROUTE[p.route] || ''}</p><p><b>Hand over by:</b> ${fmt(p.deadline)}</p><p><b>Items (${p.n}):</b> ${esc((p.items || []).join(', '))}</p>${p.lots && Object.keys(p.lots).length ? `<p><b>Colour lots:</b> ${Object.entries(p.lots).map(([g, v]) => g + ' ' + v.length).join(', ')}</p>` : ''}</div>`); }
@@ -401,11 +414,13 @@ function act(a, arg) {
   const rv = queue(pendRev())[0], ap = queue(pendApp())[0];
   const go = { home: 'home', check: 'check', pickups: 'pickups', messages: 'messages', history: 'history' };
   if (go[a]) { st.screen = go[a]; st.sheet = null; render(); const sc = document.querySelector('.scroll'); if (sc) sc.scrollTop = 0; return; }
-  const pickRec = (status, tone, sub) => { const i = ap.input || {}; return { k: 'pickup', title: ROUTE[i.route] || i.route, sub: sub || `${(PARTNERS[i.partner_id] || {}).name || ''} · ${plural((i.items || []).length, 'item')} · ${fmt(i.deadline)}`, status, tone }; };
+  const pickRec = (status, tone, sub) => { const i = ap.input || {}; return { k: 'pickup', title: ROUTE[i.route] || i.route, sub: sub || `${(PARTNERS[i.partner_id] || {}).name || ''} · ${plural(itemsOf(ap).length, 'item')} · ${fmt(i.deadline)}`, status, tone }; };
   const labRec = (status, tone, sub) => ({ k: 'label', title: `${rv.item} ${garment(rv.item)}`.trim(), sub, status, tone });
   switch (a) {
-    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null, hist: [], hf: 'all' }); st.rt.forEach(clearTimeout); st.rt = []; render(); play(); break;
+    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null, hist: [], hf: 'all', removed: {} }); st.rt.forEach(clearTimeout); st.rt = []; render(); play(); break;
     case 'hf': st.hf = arg; render(); break;
+    case 'app-edit': st.sheet = 'app-edit'; render(); break;
+    case 'app-toggle': { const g = st.removed[ap.id] || []; st.removed[ap.id] = g.includes(arg) ? g.filter((x) => x !== arg) : [...g, arg]; if (st.removed[ap.id].length >= (ap.input.items || []).length) st.removed[ap.id] = g; render(); break; }
     case 'closesheet': st.sheet = null; render(); break;
     case 'msgopen': st.seen[arg] = 1; st.open = arg; st.sheet = 'msg'; render(); break;
     case 'doc': st.doc = arg; st.sheet = 'doc'; render(); break;
