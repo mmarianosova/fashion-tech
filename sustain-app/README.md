@@ -1,5 +1,7 @@
 # Textile Sustainability Flow: app
 
+> **Current UI:** screen names and behavior are in [../docs/ui-current.md](../docs/ui-current.md). Older names in this file (Check labels, Approve pickups) are now Items to review and Pickups to review.
+
 Next.js (App Router, TypeScript) interface + backend for two ZooWork agents (Intake, Disposition). ZooWork runs the agents; this app runs the tools, the two human checkpoints (Check labels, Approve pickups), the Messages inbox and the cost guard. It is mobile first: Home has three big buttons, and every screen has one job.
 
 ## Run it (Codespaces)

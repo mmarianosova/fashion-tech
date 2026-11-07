@@ -38,6 +38,8 @@ Serverless caution: keep every handler short and idempotent. Do not hold a strea
 Validate every tool input (zod). Never take user or tenant identity from tool input.
 
 ## 4. Screens (mobile first, one job per screen)
+
+> **Superseded.** The screen list below describes the first UI (names such as Check labels and Approve pickups, swipe cards for pickups, a start card on Home). The current UI is in [docs/ui-current.md](../../docs/ui-current.md); it wins where they differ.
 The app is built for people with little tech experience: big type, one thing to do per screen, plain words. Same screens for everyone (no roles, no login in the demo build). It shows only the six steps in the use-case one-pager and the two human checkpoints.
 1. **Home** (`/`): a banner "N things need you", three big buttons with count badges (Check labels, Approve pickups, Messages), and one start card: "Start reading labels" when a new batch arrives (starts the Intake Agent), then "Run now" (starts the Disposition Agent; it also runs on its daily schedule).
 2. **Check labels** (`/check`): checkpoint 1. Cards for items the Intake Agent held (confidence under 0.80). Three buttons: No / Change this / Yes. Yes (or swipe right) approves the proposed tags. Change this opens the pile picker. No (or swipe left) offers Send to someone (a named person from `data/people.json`; the item stays in the queue with a "With X" chip, the agent keeps waiting) or Delete from pile (reject).
