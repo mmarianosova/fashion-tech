@@ -100,6 +100,10 @@ export default function Check() {
           <ul>{workbook.rows.map((row: { sheet: string; row: number; composition?: string; color?: string }) =>
             <li key={`${row.sheet}:${row.row}`}>{row.sheet}, row {row.row} {[row.composition, row.color].filter(Boolean).join(' · ')}</li>)}</ul>
           <p>Website lookup {top.evidence.lookup.status.replaceAll('_', ' ')}</p>
+          {top.evidence.lookup.verified && <p>
+            {[top.evidence.lookup.verified.composition, top.evidence.lookup.verified.color].filter(Boolean).join(' · ')}
+            {' '}<a href={top.evidence.lookup.verified.url} target="_blank" rel="noreferrer">Open product page</a>
+          </p>}
         </details>}
       </>)}
       {err && <p className="err">{err}</p>}

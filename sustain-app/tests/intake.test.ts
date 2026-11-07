@@ -81,3 +81,69 @@ test('catalog batch persists evidence, refuses automatic tagging and allows a hu
   const [saved] = await db.all("SELECT status,fibre_type,condition FROM inventory WHERE item_key='B:T123'");
   assert.deepEqual({ ...saved }, { status: 'tagged', fibre_type: 'polyester', condition: 'damaged' });
 });
+
+test('website lookup tries the catalog link first and falls back to a verified exact style', async () => {
+  const order: string[] = [];
+  const official = 'https://www.marcusadlerny.com/products/example?variant=42';
+  const { createProductLookup } = await import('../lib/product-lookup.ts');
+  const lookup = createProductLookup(async (query) => {
+    order.push('search');
+    assert.deepEqual(query.upcs, row.upcs);
+    return [{ url: official, style: 'T123', composition: '100% polyester', color: 'Black' }];
+  }, async () => {
+    order.push('direct');
+    return { outcome: 'http_403', matches: [] };
+  });
+  const r = await assessIntake({ ...item, catalog: catalog(row) }, lookup);
+  assert.deepEqual(order, ['direct', 'search']);
+  assert.equal(r.status, 'tagged');
+  assert.equal(r.evidence.lookup.verified?.url, official);
+  assert.deepEqual(r.evidence.lookup.attempts.map((a) => a.outcome), ['http_403', 'verified']);
+});
+
+test('a verified direct product skips fallback; a wrong UPC cannot be rescued by style', async () => {
+  const { createProductLookup } = await import('../lib/product-lookup.ts');
+  const lookup = createProductLookup(async () => assert.fail('fallback unnecessary'), async () => ({
+    outcome: 'read',
+    matches: [
+      { url: link, upc: 'wrong', style: row.style, composition: '100% nylon' },
+      { url: link, upc: row.upcs[0], composition: '100% wool', color: 'ivory' },
+    ],
+  }));
+  const r = await assessIntake({ ...item, catalog: catalog(row) }, lookup);
+  assert.equal(r.tags.fibre_type, 'wool');
+  assert.equal(r.evidence.lookup.attempts.length, 1);
+});
+
+test('manufacturer search checks the variant on the product page and keeps its own color', async (t) => {
+  const { createProductLookup, manufacturerSearch } = await import('../lib/product-lookup.ts');
+  const urls: string[] = [];
+  const composition = '<p>Hand wash.</p><p>100% cotton</p>';
+  t.mock.method(globalThis, 'fetch', async (input: URL) => {
+    urls.push(input.href);
+    if (input.pathname === '/search/suggest.json') {
+      return Response.json({ resources: { results: { products: [{ handle: 'example' }] } } });
+    }
+    const product = { description: composition, options: ['Color'], variants: [
+      { id: 41, sku: 'T124', barcode: '123456789099', options: ['Ivory'] },
+      { id: 42, sku: 'T123', barcode: '123456789012', options: ['Black'] },
+    ] };
+    return new Response(`<script type="application/json" id="ProductJson-1">${JSON.stringify(product)}</script>`,
+      { headers: { 'content-type': 'text/html' } });
+  });
+  const r = await assessIntake({ ...item, catalog: catalog({ ...row, urls: [] }) }, createProductLookup(manufacturerSearch));
+  assert.equal(r.tags.fibre_type, 'cotton');
+  assert.equal(r.tags.color_group, 'darks');
+  assert.match(r.evidence.lookup.verified?.url ?? '', /variant=42$/);
+  assert.ok(urls.some((url) => new URL(url).searchParams.get('q') === row.upcs[0]));
+});
+
+test('a numeric workbook color is replaced by the exact variant color, but layered fabric is held', async () => {
+  const r = await assessIntake({ ...item, catalog: catalog({ ...row, color: '9.75' }) }, async () => ({
+    status: 'found', matches: [{ url: link, upc: row.upcs[0], color: 'Olive',
+      composition: 'Outer: 100% leather / lining: 100% polyester' }],
+  }));
+  assert.equal(r.color, 'olive');
+  assert.match(r.reason, /Website composition needs manual classification/);
+  assert.equal(r.material, null);
+});

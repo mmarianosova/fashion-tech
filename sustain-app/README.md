@@ -61,10 +61,12 @@ shows the relevant workbook rows. Uncertain items stay outside disposition
 until a reviewer approves or edits them. Missing physical condition requires
 an edit or rejection.
 
-The workbook points to Macy's. A sampled product page returned HTTP 403.
-The app's `ProductLookup` adapter (`lib/intake.ts`, injected via
-`Deps.lookupProduct`) defaults to unconfigured. An authorized provider must
-return evidence from a verified variant; the URL's UPC query parameter is
-only a hint. Catalog pages cannot provide the condition of the physical item.
+Set `INTAKE_WEB_LOOKUP=1` to enable live product lookup. Intake tries eligible
+Macy's links from the workbook first. When the page cannot verify the variant,
+it searches the Marcus Adler storefront by exact SKU or UPC and verifies the
+identifier again against variant data from the product page. The review audit
+records attempted sources, verified fields and the product link. A mismatched
+UPC in a workbook link is skipped. Catalog pages cannot provide the condition
+of the physical item.
 The local test run uses scripted ZooWork events. Live mode requires deployed
 agents and credentials and must be verified against that environment.

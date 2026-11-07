@@ -9,6 +9,7 @@ import { simulateDisposition, simulateIntake } from './sim.ts';
 import type { McpDeps } from './mcp.ts';
 import { plan } from './rules.ts';
 import { p } from './db.ts';
+import { manufacturerSearch, createProductLookup } from './product-lookup.ts';
 
 export const env = {
   mode: (process.env.ZOO_MODE ?? 'fake') as 'fake' | 'real',
@@ -40,7 +41,9 @@ async function init(): Promise<App> {
   const now = () => new Date().toISOString();
   const newId = (prefix: string) => `${prefix}_${randomUUID().slice(0, 8)}`;
   const recyclers = loadRecyclers(dataDir);
-  return { db, zoo, deps: { db, zoo, now, newId }, mcp: { db, recyclers, now, newId } };
+  const lookupProduct = process.env.INTAKE_WEB_LOOKUP === '1'
+    ? createProductLookup(manufacturerSearch) : undefined;
+  return { db, zoo, deps: { db, zoo, now, newId, lookupProduct }, mcp: { db, recyclers, now, newId } };
 }
 
 // In fake mode the "person" decisions come from the UI; the simulator polls the DB until they arrive.
