@@ -1,5 +1,7 @@
 # Agent bridge: connecting the UI to the agents
 
+What each screen shows is in [ui-current.md](ui-current.md).
+
 The phone UI (`sustain-app/preview/index.html`, served by Vercel) has two modes.
 
 - **Demo mode (default).** Replays a recorded run with sample data so people can see the flow. Nothing in it is real. "Clear demo data" in the top strip switches to live mode.
