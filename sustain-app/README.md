@@ -69,8 +69,9 @@ Intake retains the workbook sheet and row, source composition and color, UPCs,
 product links, and lookup outcome in `intake_assessments`. The Check labels screen
 shows the relevant workbook rows. Uncertain materials go to Check labels. Separate compositions for outer fabric and lining are retained when the source gives both.
 
-Set `INTAKE_WEB_LOOKUP=1` to enable live product lookup. Intake tries eligible
-Macy's links from the workbook first. When the page cannot verify the variant,
+Live product lookup is enabled by default. Set `INTAKE_WEB_LOOKUP=0` for an
+offline run. When the catalog cannot verify the required fields, Intake tries
+eligible Macy's links first. When a page cannot verify the product details,
 it searches the Marcus Adler storefront by exact SKU or UPC and verifies the
 identifier again against variant data from the product page. Set
 `BRAVE_SEARCH_API_KEY` to enable a web-index fallback after the storefront.

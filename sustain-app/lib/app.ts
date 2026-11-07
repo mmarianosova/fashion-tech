@@ -45,7 +45,7 @@ async function init(): Promise<App> {
   const newId = (prefix: string) => `${prefix}_${randomUUID().slice(0, 8)}`;
   const recyclers = loadRecyclers(dataDir);
   const indexKey = process.env.BRAVE_SEARCH_API_KEY;
-  const lookupProduct = process.env.INTAKE_WEB_LOOKUP === '1'
+  const lookupProduct = process.env.INTAKE_WEB_LOOKUP !== '0'
     ? createProductLookup(manufacturerSearch, undefined, indexKey ? braveSearchIndex(indexKey) : undefined) : undefined;
   return { db, zoo, deps: { db, zoo, now, newId, lookupProduct, materialOnly: true }, mcp: { db, recyclers, now, newId, today: env.today } };
 }
