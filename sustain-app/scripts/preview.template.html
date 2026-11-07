@@ -8,7 +8,7 @@
 // Demo mode: a recorded run of the real app code, replayed as the phone screens. The work happens in the background by itself;
 // the person only decides the items that come up. Whatever is chosen, the recorded story continues the same way. Nothing here is real data.
 const S = (d, w = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-const I = { back: S('<path d="M15 6l-6 6 6 6"/>'), check: S('<path d="M5 12l5 5L20 7"/>', 2.4), x: S('<path d="M6 6l12 12M18 6 6 18"/>', 2.2),
+const I = { plus: S('<path d="M12 5v14M5 12h14"/>', 2.2), back: S('<path d="M15 6l-6 6 6 6"/>'), check: S('<path d="M5 12l5 5L20 7"/>', 2.4), x: S('<path d="M6 6l12 12M18 6 6 18"/>', 2.2),
   home: S('<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'),
   label: S('<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>'),
   truck: S('<path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>'),
@@ -47,7 +47,7 @@ const SEED = [
   { k: 'pickup', title: 'Fabric shredding', sub: `${firstPartner.name || 'Recycler'} · Hand over by ${fmt(addDays(FRAMES[0].today, 3))}`, status: 'Booked', tone: 'book' },
 ];
 
-const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [], hist: [], hf: 'all', removed: {} };
+const st = { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, timer: null, exit: null, doc: null, open: null, rt: [], hist: [], hf: 'all', removed: {}, added: {} };
 const F = () => FRAMES[st.fi];
 const pendRev = () => F().reviews.filter((r) => r.state === 'pending');
 const pendApp = () => F().approvals.filter((a) => a.state === 'pending');
@@ -55,7 +55,12 @@ const pendApp = () => F().approvals.filter((a) => a.state === 'pending');
 const notice = () => { const a = pendApp()[0]; if (!a || !a.input) return []; const i = a.input;
   return [{ id: 'resched-' + a.id, type: 'rescheduled', ref: 'approval', items: i.items || [], summary: `No action was taken on ${ROUTE[i.route] || i.route} (${plural((i.items || []).length, 'item')}), so it was rescheduled to ${fmt(addDays(i.deadline, 7))}. Verify it or change it.`, next: 'Open it in Pickups to review and choose Book pickup, Reschedule or Don’t book.' }]; };
 const alerts = () => [...notice(), ...st.msgs, ...F().alerts];
-const itemsOf = (a) => ((a.input && a.input.items) || []).filter((x) => !(st.removed[a.id] || []).includes(x));
+const baseItems = (a) => [...((a.input && a.input.items) || []), ...(st.added[a.id] || [])];
+const itemsOf = (a) => baseItems(a).filter((x) => !(st.removed[a.id] || []).includes(x));
+// Other items of the same kind (same pile as this pickup) that are not already in a pickup.
+const STREAM = { recycle_denim: 'denim', recycle_shred: 'shred', recycle_mixed: 'mixed' };
+const addable = (a) => { const taken = new Set([...F().approvals.flatMap((x) => (x.input && x.input.items) || []), ...F().pickups.flatMap((p) => p.items || []), ...baseItems(a)]);
+  return F().items.filter((i) => i[5] === STREAM[a.input.route] && !taken.has(i[0])).map((i) => i[0]); };
 const unread = () => alerts().filter((a) => !st.seen[a.id]).length;
 
 function stopPlay() { clearInterval(st.timer); st.timer = null; }
@@ -166,8 +171,10 @@ function sheets() {
   if (st.sheet === 'rev-who' && rv) return sheet('Who should decide?', rv.item + ' stays in the list until they answer.', who('rev-send'), 'rev-options');
   if (st.sheet === 'app-options' && ap) return sheet('What should we do?', (ROUTE[ap.input.route] || '') + ' pickup for ' + fmt(ap.input.deadline), opt(I.person, 'Send to someone', 'They decide. It stays here until someone answers.', 'app-who', 'warn') + opt(I.calendar, 'Reschedule', 'Pick a later hand-over date', 'app-date') + opt(I.x, 'Don’t book it', 'The items come back on the next run.', 'app-deny', 'bad'));
   if (st.sheet === 'app-date' && ap) return sheet('Pick a new date', 'Now: ' + fmt(ap.input.deadline) + '. The pickup is proposed again with the new date.', [3, 7, 14].map((n) => opt(I.calendar, fmt(addDays(ap.input.deadline, n)), n + ' days later', 'app-resched', '', fmt(addDays(ap.input.deadline, n)))).join(''), 'app-options');
-  if (st.sheet === 'app-edit' && ap) { const all = (ap.input && ap.input.items) || [], gone = st.removed[ap.id] || [];
-    return sheet('Edit items', 'Tap an item to leave it out of this pickup.', all.map((x) => `<button class="chk ${gone.includes(x) ? '' : 'on'}" data-act="app-toggle" data-arg="${esc(x)}"><span class="bx">${gone.includes(x) ? '' : I.check}</span>${esc(x)} ${esc(garment(x))}</button>`).join('') + `<button class="big" data-act="closesheet">Done</button>`); }
+  if (st.sheet === 'app-edit' && ap) { const all = baseItems(ap), gone = st.removed[ap.id] || [], more = addable(ap);
+    return sheet('Edit items', 'Tap an item to leave it out of this pickup.', all.map((x) => `<button class="chk ${gone.includes(x) ? '' : 'on'}" data-act="app-toggle" data-arg="${esc(x)}"><span class="bx">${gone.includes(x) ? '' : I.check}</span>${esc(x)} ${esc(garment(x))}</button>`).join('')
+      + `<div class="sect">Add more items</div>` + (more.length ? more.map((x) => `<button class="chk add" data-act="app-add" data-arg="${esc(x)}"><span class="bx">${I.plus}</span>${esc(x)} ${esc(garment(x))}</button>`).join('') : `<p class="msg-body">No other items match this pickup.</p>`)
+      + `<button class="big" data-act="closesheet">Done</button>`); }
   if (st.sheet === 'app-who' && ap) return sheet('Who should decide?', 'The booking stays in the list until they answer.', who('app-send'), 'app-options');
   if (st.sheet === 'doc') { const p = F().pickups.find((x) => x.id === st.doc) || {}, pt = PARTNERS[p.partner] || {};
     return sheet('Pickup request', '', `<div class="reqdoc"><h4>Pickup request ${esc(p.id)}</h4><p><b>Collector:</b> ${esc(pt.name)}, ${esc(pt.address)}</p><p><b>Type:</b> ${ROUTE[p.route] || ''}</p><p><b>Hand over by:</b> ${fmt(p.deadline)}</p><p><b>Items (${p.n}):</b> ${esc((p.items || []).join(', '))}</p>${p.lots && Object.keys(p.lots).length ? `<p><b>Colour lots:</b> ${Object.entries(p.lots).map(([g, v]) => g + ' ' + v.length).join(', ')}</p>` : ''}</div>`); }
@@ -190,10 +197,11 @@ function act(a, arg) {
   const pickRec = (status, tone, sub) => { const i = ap.input || {}; return { k: 'pickup', title: ROUTE[i.route] || i.route, sub: sub || `${(PARTNERS[i.partner_id] || {}).name || ''} · ${plural(itemsOf(ap).length, 'item')} · ${fmt(i.deadline)}`, status, tone }; };
   const labRec = (status, tone, sub) => ({ k: 'label', title: `${rv.item} ${garment(rv.item)}`.trim(), sub, status, tone });
   switch (a) {
-    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null, hist: [], hf: 'all', removed: {} }); st.rt.forEach(clearTimeout); st.rt = []; render(); play(); break;
+    case 'restart': stopPlay(); Object.assign(st, { fi: 0, screen: 'home', sheet: null, sent: {}, msgs: [], seen: {}, toast: null, exit: null, open: null, hist: [], hf: 'all', removed: {}, added: {} }); st.rt.forEach(clearTimeout); st.rt = []; render(); play(); break;
     case 'hf': st.hf = arg; render(); break;
     case 'app-edit': st.sheet = 'app-edit'; render(); break;
-    case 'app-toggle': { const g = st.removed[ap.id] || []; st.removed[ap.id] = g.includes(arg) ? g.filter((x) => x !== arg) : [...g, arg]; if (st.removed[ap.id].length >= (ap.input.items || []).length) st.removed[ap.id] = g; render(); break; }
+    case 'app-add': (st.added[ap.id] = st.added[ap.id] || []).push(arg); render(); break;
+    case 'app-toggle': { const g = st.removed[ap.id] || []; st.removed[ap.id] = g.includes(arg) ? g.filter((x) => x !== arg) : [...g, arg]; if (st.removed[ap.id].length >= baseItems(ap).length) st.removed[ap.id] = g; render(); break; }
     case 'closesheet': st.sheet = null; render(); break;
     case 'msgopen': st.seen[arg] = 1; st.open = arg; st.sheet = 'msg'; render(); break;
     case 'doc': st.doc = arg; st.sheet = 'doc'; render(); break;
