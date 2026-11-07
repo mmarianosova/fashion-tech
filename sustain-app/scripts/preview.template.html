@@ -258,6 +258,8 @@ function sheets() {
   return '';
 }
 
+let renderedScreen, renderedSheet, renderedMarkup;
+const renderedParts = new Map();
 function render() {
   if (st.dragging) return;
   const strip = CFG.embed ? '' : st.mode === 'live'
@@ -265,7 +267,45 @@ function render() {
     : `<div class="demo-strip">Demo with sample data. Whatever you choose, the story continues the same way.<button data-act="restart">Restart</button><button data-act="clear">Clear demo data</button></div>`;
   const sbar = `<div class="sbar" aria-hidden="true">9:41<span>${I.sig}${I.wifi}${I.batt}</span></div>`;
   const body = st.screen === 'check' ? check() : st.screen === 'pickups' ? pickups() : st.screen === 'messages' ? messages() : st.screen === 'history' ? history() : st.screen === 'guide' ? guide() : home();
-  document.getElementById('app').innerHTML = sbar + strip + `<div class="scroll">${body}</div>` + tabbar() + sheets() + (st.toast ? `<div class="toast" role="status">${esc(st.toast)}</div>` : '');
+  const markup = sbar + strip + `<div class="scroll">${body}</div>` + tabbar() + sheets() + (st.toast ? `<div class="toast" role="status">${esc(st.toast)}</div>` : '');
+  if (renderedScreen === st.screen && renderedSheet === st.sheet && renderedMarkup === markup) return;
+  const app = document.getElementById('app');
+  const next = document.createElement('template');
+  next.innerHTML = markup;
+  const previous = new Map(Array.from(app.children, (node) => [node.classList[0], node]));
+  let after = null;
+  for (const part of Array.from(next.content.children)) {
+    const key = part.classList[0];
+    const old = previous.get(key);
+    const html = part.outerHTML;
+    let node = old;
+    if (!old || renderedParts.get(key) !== html) {
+      if (old && key === 'sheet-bg' && renderedSheet === st.sheet && renderedScreen === st.screen) {
+        const panel = old.querySelector('.sheet');
+        const top = panel.scrollTop;
+        panel.innerHTML = part.querySelector('.sheet').innerHTML;
+        panel.scrollTop = top;
+      } else if (old && key === 'scroll' && renderedScreen === st.screen) {
+        const top = old.scrollTop;
+        old.innerHTML = part.innerHTML;
+        old.scrollTop = top;
+      } else {
+        if (old) old.replaceWith(part);
+        else app.insertBefore(part, after ? after.nextSibling : app.firstChild);
+        node = part;
+      }
+      renderedParts.set(key, html);
+    }
+    previous.delete(key);
+    after = node;
+  }
+  for (const [key, node] of previous) {
+    node.remove();
+    renderedParts.delete(key);
+  }
+  renderedMarkup = markup;
+  renderedScreen = st.screen;
+  renderedSheet = st.sheet;
   bindSwipe();
 }
 
@@ -351,8 +391,11 @@ async function act(a, arg) {
 function fly(dir, then) { st.exit = dir; render(); setTimeout(then, 230); }
 
 document.addEventListener('click', (e) => {
-  if (e.target.closest('[data-stop]') && !e.target.closest('[data-act]')) return;
-  const el = e.target.closest('[data-act]'); if (el) { e.preventDefault(); act(el.dataset.act, el.dataset.arg); }
+  const el = e.target.closest('[data-act]');
+  const panel = e.target.closest('[data-stop]');
+  if (!el || (panel && !panel.contains(el))) return;
+  e.preventDefault();
+  act(el.dataset.act, el.dataset.arg);
 });
 function bindSwipe() {
   const c = document.getElementById('card'); if (!c || st.exit) return;
@@ -371,7 +414,7 @@ function bindSwipe() {
 const Q = new URLSearchParams(location.search);
 const CFG = { api: (Q.get('api') || '').replace(/\/$/, ''), adapter: Q.get('adapter') || 'events', poll: Number(Q.get('poll')) || 3000, embed: Q.get('embed') === '1', locked: Q.get('lock') === '1', origin: Q.get('origin') || '' };
 let OUT = []; try { OUT = JSON.parse(localStorage.getItem('tf.outputs') || '[]'); } catch (e) { OUT = []; }
-let EVN = 0, pollTimer = null, lastPull = '';
+let EVN = 0, pollTimer = null, lastPull = '', pulling = false;
 const DEMO_P = JSON.stringify(PARTNERS), DEMO_PPL = [...PEOPLE], DEMO_ITEM = { ...ITEM };
 
 // Outputs: one event per person decision. Bodies match the Next app's API (reviews / approvals / alerts) so a backend can reuse them.
@@ -435,11 +478,23 @@ function fromNext(s) {
     alerts: (s.alerts || []).map((a) => ({ id: a.alert_id, type: a.type, summary: a.summary, items: a.items, deadline: a.deadline, next: a.next_step, ref: a.ref_kind, from: a.from_name, read: !!a.is_read })) };
 }
 async function pull() {
-  if (st.sheet === 'app-date' || st.sheet === 'app-calendar') return;
-  try { const r = await fetch(CFG.api + (CFG.adapter === 'next' ? '/api/state' : '/inputs'), { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
-    let j = await r.json(); if (CFG.adapter === 'next') j = fromNext(j); const key = JSON.stringify(j); st.conn = 'connected';
-    if (key !== lastPull) { lastPull = key; push(j); } else render();
-  } catch (e) { st.conn = 'offline'; render(); }
+  if (pulling || st.sheet === 'app-date' || st.sheet === 'app-calendar') return;
+  pulling = true;
+  const prior = st.conn;
+  try {
+    const r = await fetch(CFG.api + (CFG.adapter === 'next' ? '/api/state' : '/inputs'), { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    let j = await r.json();
+    if (st.mode !== 'live') return;
+    if (CFG.adapter === 'next') j = fromNext(j);
+    const key = JSON.stringify(j);
+    st.conn = 'connected';
+    if (key !== lastPull) { lastPull = key; push(j); }
+    else if (prior !== st.conn) render();
+  } catch (e) {
+    st.conn = 'offline';
+    if (prior !== st.conn) render();
+  } finally { pulling = false; }
 }
 function startPoll() { clearInterval(pollTimer); pollTimer = null; if (st.mode === 'live' && CFG.api) { pull(); pollTimer = setInterval(pull, CFG.poll); } }
 
