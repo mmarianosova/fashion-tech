@@ -17,7 +17,7 @@ type Frame = any;
 const frames: Frame[] = [];
 const trim = (snap: any, gate: string | null, note: string): Frame => ({
   gate, note, today: snap.today,
-  items: snap.items.map((i: any) => [i.item_key, i.garment_type, i.color, i.label_text, i.state, i.stream, i.fibre_type, i.color_group, i.confidence]),
+  items: snap.items.map((i: any) => [i.item_key, i.garment_type, i.color, i.label_text, i.state, i.stream, i.fibre_type, i.color_group, i.confidence, i.condition]),
   reviews: snap.reviews.map((r: any) => ({ id: r.review_id, item: r.item_key, state: r.state, reason: r.reason, conf: r.confidence, label: r.label_text, proposed: r.proposed_tags, decided: r.decided_tags })),
   approvals: snap.approvals.map((a: any) => ({ id: a.approval_id, state: a.state, input: a.input })),
   pickups: snap.pickups.map((p: any) => ({ id: p.booking_id, route: p.route, partner: p.partner_id, n: p.items.length, deadline: p.deadline })),
@@ -73,7 +73,8 @@ await rec(null, 'Second run, same day: nothing new is due, no duplicate alerts')
 
 const tpl = readFileSync(join(root, 'scripts', 'preview.template.html'), 'utf8');
 const css = readFileSync(join(root, 'app', 'globals.css'), 'utf8');
-const html = tpl.replace('/*CSS*/', css).replace('/*FRAMES*/', 'const FRAMES=' + JSON.stringify(frames) + ';');
+const partners = Object.fromEntries(s.mcp.recyclers.map((r: any) => [r.id, r.name.replace(' (fictional)', '')]));
+const html = tpl.replace('/*CSS*/', css).replace('/*FRAMES*/', 'const FRAMES=' + JSON.stringify(frames) + ';const PARTNERS=' + JSON.stringify(partners) + ';');
 mkdirSync(join(root, 'preview'), { recursive: true });
 writeFileSync(join(root, 'preview', 'index.html'), html);
 console.log(`frames=${frames.length} gates=${frames.filter((f) => f.gate).length} size=${(html.length / 1024).toFixed(0)} KB`);

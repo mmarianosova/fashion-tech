@@ -1,74 +1,99 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Textile Sustainability Flow: replay preview</title>
+<title>Textile Flow: replay preview</title>
 <style>/*CSS*/
-.bar{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);padding:8px 20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.note{font-weight:600}.gatebox{border:2px solid var(--amber);background:#fff8ec}.hide{display:none}
-nav a{cursor:pointer}
+.ctl{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);padding:8px 24px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;backdrop-filter:blur(6px)}
+.ctl .note2{font-weight:700}.ctl .pos{margin-left:auto;color:var(--mute);font-size:13px}.ctl span.tag{background:var(--blue-soft);color:var(--blue);border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700}
+.side a{cursor:pointer}.hide{display:none!important}
+@media(max-width:860px){.ctl{padding:8px 12px}}
 </style></head><body>
-<nav><b>Textile Sustainability Flow</b>
- <a data-t="intake">1 Intake</a><a data-t="review">2 Review <span class="badge hide" id="b-rev"></span></a>
- <a data-t="disp">3 Disposition <span class="badge hide" id="b-app"></span></a><a data-t="alerts">4 Alerts and cost <span class="badge hide" id="b-alt"></span></a>
- <span class="mode">replay of a recorded run | fake agents | no cost</span></nav>
-<div class="bar"><button id="play">Play</button><button class="alt" id="next">Next step</button><button class="alt" id="gate">Skip to next decision</button>
- <button class="alt" id="reset">Restart</button><span class="note" id="note"></span><span class="sub" id="pos" style="margin-left:auto"></span></div>
-<main id="main"></main>
+<div class="shell">
+<aside class="side"><div class="brand"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c4 3 6 6 6 9a6 6 0 0 1-12 0c0-3 2-6 6-9Z"/><path d="M12 21v-8"/></svg></div>Textile Flow</div>
+ <a data-t="intake"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M4 12h16"/></svg><span>Intake</span></a>
+ <a data-t="review"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg><span>Review</span><span class="badge hide" id="b-rev"></span></a>
+ <a data-t="disp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></svg><span>Disposition</span><span class="badge hide" id="b-app"></span></a>
+ <a data-t="alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span>Alerts</span><span class="badge hide" id="b-alt"></span></a>
+ <div class="sp"></div><div class="meta">Replay | demo agents | no cost</div></aside>
+<div class="content">
+ <div class="ctl"><button id="play" class="alt">Play</button><button class="alt" id="next">Next step</button><button class="alt" id="gate">Skip to next decision</button><button class="alt" id="reset">Restart</button>
+  <span class="note2" id="note"></span><span class="pos" id="pos"></span></div>
+ <div id="page"></div>
+</div></div>
 <script>
 /*FRAMES*/
 let i=0,tab='intake',timer=null;
 const $=s=>document.querySelector(s);
-const pill=v=>`<span class="pill p-${v}">${v}</span>`;
-const tagText=t=>t?`${t.stream} / ${t.fibre_type} / ${t.color_group} / ${t.condition}`:'';
 const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-const RS={received_60d:'60+ days in stock',item_date:'item date passed',return_window:'return window closed',season_end:'season ended'};
-const stat=(n,l)=>`<div class="stat"><b>${n}</b><span>${l}</span></div>`;
+const pill=v=>`<span class="pill p-${v}">${v}</span>`;
+const dot=g=>`<span class="sw sw-${g}"></span>`;
+const tags=(s,fi,cg,co)=>`<span class="chip c-${s}">${s}</span><span class="chip">${esc(fi)}</span><span class="chip">${dot(cg)}${cg}</span>${co?`<span class="chip">${co}</span>`:''}`;
+const tg=t=>t?tags(t.stream,t.fibre_type,t.color_group,t.condition):'';
+const conf=v=>v==null?'':`<span class="conf">${v.toFixed(2)}<span class="bar"><i style="width:${v*100}%;background:${v>=.8?'var(--green)':v>=.55?'var(--gate)':'var(--red)'}"></i></span></span>`;
+const metric=(l,n,s,t='')=>`<div class="metric ${t}"><label>${l}</label><b>${n}</b><small>${s||''}</small></div>`;
 const empty=t=>`<div class="empty">${t}</div>`;
-function feed(f){return f.events.length?`<div class="feed">${f.events.map(e=>`<div>${e[0]}  ${esc(e[1])}  ${esc(e[2])}(${esc(e[3])})</div>`).join('')}</div>`:empty('No agent activity yet.')}
+const hero=(e,t,s,r='')=>`<div class="hero"><div class="hero-in"><div class="grow"><div class="eyebrow">${e}</div><h1>${t}</h1><p>${s}</p></div>${r}</div></div>`;
+const fmt=d=>d?new Date(d+'T00:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'}):'';
+const REASON={received_60d:'60+ days in stock',item_date:'item date passed',return_window:'return window closed',season_end:'season ended'};
+const ESC={below_minimum:'Below the partner minimum',dispose_confirm:'Disposal needs confirmation',no_partner:'No partner accepts this route'};
+const TITLE={donate_recycle_due:'Pickup ready',review_waiting:'Needs your attention'};
+const TRUCK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg>';
+const Q='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>';
+const CHECK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+const FLAG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>';
+const feed=f=>f.events.length?`<div class="feed">${f.events.map(e=>`<div>${e[0]}  <b>${esc(e[1])}</b>  ${esc(e[2])}(${esc(e[3])})</div>`).join('')}</div>`:empty('No agent activity yet.');
+
+function intake(f){const c=s=>f.items.filter(x=>x[4]===s).length,n=f.items.length;
+ return hero('Step 1 | Batch SEED-1','Scan labels. Tag every item.','The Intake Agent reads each label, tags the garment for recycling, and holds anything it is unsure about for a person.','<button class="btn-ai" disabled>Replaying a recorded run</button>')+
+ `<main class="pull"><div class="metrics">${metric('Items in batch',n,'waiting to be scanned')}${metric('Tagged',c('tagged'),'of '+n+' items','m-green')}${metric('Held for review',c('held'),'needs a person','m-amber')}${metric('Rejected',c('rejected'),'removed from the flow','m-red')}${metric('Still waiting',c('pending'),'agent has not reached them','m-violet')}</div>
+ ${c('held')?`<div class="card row" style="border-left:5px solid var(--gate)"><b>${c('held')} item waiting for a person.</b><a href="#" onclick="tab='review';render();return false">Open the review queue</a></div>`:''}
+ <h2>Items</h2><div class="tbl"><table><thead><tr><th>Item</th><th>Garment</th><th>Label text</th><th>Status</th><th>Tags</th><th>Confidence</th></tr></thead><tbody>
+ ${f.items.map(x=>`<tr><td class="key">${x[0]}</td><td>${esc(x[1])}<div class="sub">${esc(x[2])}</div></td><td class="lbl">${x[3]?esc(x[3]):'<i class="sub">no label text</i>'}</td><td>${pill(x[4])}</td><td>${x[5]?tags(x[5],x[6],x[7],x[9]):''}</td><td>${conf(x[8])}</td></tr>`).join('')}</tbody></table></div>
+ <h2>Live agent feed</h2>${feed(f)}</main>`}
+
+function review(f){const p=f.reviews.filter(r=>r.state==='pending'),d=f.reviews.filter(r=>r.state!=='pending');
+ const card=r=>{const tone=r.conf>=.8?'ok':r.conf>=.55?'warn':'bad';return `<div class="fc ${r.state==='pending'?'gate':''}"><div class="fc-head"><div class="fc-ico">${Q}</div><div class="grow"><div class="fc-t">${r.item}</div><div class="fc-s">Held for review</div></div>${pill(r.state)}</div>
+ <div class="fc-status">${esc(r.reason)}<small>The agent is paused on this item until you decide.</small></div>
+ <div class="fc-leg"><div><div class="fc-k">Label text</div><div class="fc-mid">${r.label?esc(r.label):'No label text'}</div></div><div style="text-align:right"><div class="fc-k">Confidence</div><div class="fc-big ${tone}">${r.conf.toFixed(2)}</div></div></div>
+ ${r.proposed?`<div class="fc-leg"><div><div class="fc-k">Proposed tags</div><div style="margin-top:6px">${tg(r.proposed)}</div></div></div>`:''}
+ ${r.state!=='pending'&&r.decided?`<div class="fc-leg"><div><div class="fc-k">Decision: ${r.state}</div><div style="margin-top:6px">${tg(r.decided)}</div></div></div>`:''}
+ ${r.state==='pending'?`<div class="fc-act"><button class="go" data-act>Approve proposed tags</button><button class="alt" disabled title="in the live app">Edit</button><button class="no" disabled title="in the live app">Reject item</button></div>`:''}</div>`};
+ return hero('Step 2 | Human in the loop',p.length?p.length+' waiting for you':'Nothing waiting','Items the Intake Agent was not confident about. Approve its proposal, edit the tags, or reject the item.')+
+ `<main class="pull">${p.length?p.map(card).join(''):empty('All clear. Keep playing: uncertain items appear here during the intake run.')}${d.length?`<h2>Decided</h2>${d.map(card).join('')}`:''}</main>`}
+
+function disp(f){const pl=f.plan;
+ return hero('Step 3 | Review date '+f.today,'Route, book, notify.','The Disposition Agent finds items whose time is up, routes them to donate, recycle or dispose, books pickups (you approve each one), and sends alerts.','<button class="btn-ai" disabled>Replaying a recorded run</button>')+
+ `<main class="pull"><div class="metrics">${metric('Due now',pl.due,'of '+f.inv+' in inventory','m-amber')}${metric('Pickups possible',pl.pickups,'meet partner minimums','m-green')}${metric('Need a person',pl.esc.length,'escalated groups','m-red')}${metric('Skipped',pl.skipped,'held, not due, or alerted')}</div>
+ <h2>Pickup bookings</h2>${f.approvals.length?f.approvals.map(a=>{const i=a.input,pend=a.state==='pending';return `<div class="fc ${pend?'gate':''}"><div class="fc-head"><div class="fc-ico">${TRUCK}</div><div class="grow"><div class="fc-t">${String(i.route).replace('_',' ')} pickup</div><div class="fc-s">${i.items.length} items | ${esc(PARTNERS[i.partner_id])}</div></div>${pill(a.state)}</div>
+ <div class="fc-status">${pend?'Waiting for your approval':a.state==='allowed'?'Booked':'Denied'}<small>The agent is ${pend?'paused until you decide':'done with this booking'}.</small></div>
+ <div class="fc-leg"><div><div class="fc-k">Hand over by</div><div class="fc-big ${pend?'warn':'ok'}">${fmt(i.deadline)}</div></div><div style="text-align:right"><div class="fc-k">Partner</div><span class="chip c-gate">${i.partner_id}</span></div></div>
+ <div class="fc-leg"><div><div class="fc-k">Items</div><div class="fc-mid" style="font-size:15px">${i.items.join(', ')}</div>${i.lots&&Object.keys(i.lots).length?`<div style="margin-top:8px">${Object.entries(i.lots).map(([g,v])=>`<span class="chip">${dot(g)}${g} ${v.length}</span>`).join('')}</div>`:''}</div></div>
+ ${pend?`<div class="fc-act"><button class="go" data-act>Approve booking</button><button class="no" disabled title="in the live app">Deny</button></div>`:''}</div>`}).join(''):empty('No bookings requested yet. Keep playing until the Disposition run.')}
+ <h2>Due now and why</h2>${pl.routes.length?`<div class="tbl" style="max-height:320px"><table><thead><tr><th>Item</th><th>Route</th><th>Colour</th><th>Why it is due</th></tr></thead><tbody>${pl.routes.map(r=>`<tr><td class="key">${r[0]}</td><td><span class="chip">${r[1].replace('_',' ')}</span></td><td><span class="chip">${dot(r[2])}${r[2]}</span></td><td>${r[3].map(x=>REASON[x]).join(', ')}</td></tr>`).join('')}</tbody></table></div>`:empty('Nothing is due. Everything due has already been handled.')}
+ ${pl.escalations.length?`<h2>Needs a person</h2>${pl.escalations.map(e=>`<div class="note"><div class="note-ico n-warn">!</div><div><h4>${ESC[e.reason]||e.reason}</h4><p>${e.items.join(', ')}</p></div></div>`).join('')}`:''}
+ ${f.pickups.length?`<h2>Booked pickups</h2>${f.pickups.map(p=>`<div class="note"><div class="note-ico n-ok">${TRUCK}</div><div><h4>${p.route.replace('_',' ')} with ${esc(PARTNERS[p.partner])}</h4><p>${p.n} items, by ${fmt(p.deadline)} | ${p.id}</p></div></div>`).join('')}`:''}
+ <h2>Live agent feed</h2>${feed(f)}</main>`}
+
+function alerts(f){const n=f.alerts.length;
+ return hero('Step 4 | Notify',n?n+' new alert'+(n>1?'s':''):'Alerts','What the responsible person receives, and what the agents are costing.')+
+ `<main class="pull"><div class="metrics">${metric('ZooWork balance','$100.00','demo mode, no spend','m-green')}${metric('Alerts sent',n,n+' unread')}${metric('Agents',2,'Intake and Disposition','m-violet')}</div>
+ <h2>Inbox</h2>${n?f.alerts.map(a=>`<div class="note unread"><div class="note-ico ${a.type==='review_waiting'?'n-warn':'n-ok'}">${a.type==='review_waiting'?FLAG:CHECK}</div><div><h4>${TITLE[a.type]||a.type}: ${esc(a.summary)}</h4><p>Items: ${a.items.join(', ')}${a.location?' | '+esc(a.location):''}${a.deadline?' | by '+a.deadline:''}</p><p class="nx">Next step: ${esc(a.next)}</p></div></div>`).join(''):empty('No alerts yet. Keep playing until the Disposition run.')}</main>`}
+
 function render(){
  const f=FRAMES[i];
  $('#note').textContent=f.note; $('#pos').textContent=`step ${i+1} of ${FRAMES.length}`;
  const pr=f.reviews.filter(r=>r.state==='pending').length, pa=f.approvals.filter(r=>r.state==='pending').length, un=f.alerts.length;
  for(const [id,n] of [['b-rev',pr],['b-app',pa],['b-alt',un]]){const e=$('#'+id);e.textContent=n;e.classList.toggle('hide',!n)}
- document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.t===tab));
- $('#main').innerHTML=({intake,review,disp,alerts})[tab](f);
+ document.querySelectorAll('.side a').forEach(a=>a.classList.toggle('on',a.dataset.t===tab));
+ $('#page').innerHTML=({intake,review,disp,alerts})[tab](f);
  document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{advance()});
 }
-function intake(f){const c=s=>f.items.filter(x=>x[4]===s).length;
- return `<h1>1. Intake: scan labels and tag items</h1><p class="sub">The Intake Agent reads each label, tags the garment, and holds anything it is unsure about for a person.</p>
- <div class="card row">${stat(f.items.length,'items')}${stat(c('tagged'),'tagged')}${stat(c('held'),'held for review')}${stat(c('rejected'),'rejected')}${stat(c('pending'),'waiting')}</div>
- ${c('held')?`<p><b>${c('held')}</b> item is waiting for a person. Open <b>2 Review</b>.</p>`:''}
- <h2>Items</h2><div class="card" style="padding:0;overflow:auto;max-height:420px"><table><thead><tr><th>Item</th><th>Garment</th><th>Label text</th><th>Status</th><th>Tags (stream / fibre / colour)</th><th>Conf.</th></tr></thead><tbody>
- ${f.items.map(x=>`<tr><td>${x[0]}</td><td>${esc(x[1])}, ${esc(x[2])}</td><td>${x[3]?esc(x[3]):'<i>none</i>'}</td><td>${pill(x[4])}</td><td>${x[5]?`${x[5]} / ${x[6]} / ${x[7]}`:''}</td><td>${x[8]!=null?x[8].toFixed(2):''}</td></tr>`).join('')}</tbody></table></div>
- <h2>Live agent feed</h2>${feed(f)}`}
-function review(f){const p=f.reviews.filter(r=>r.state==='pending'),d=f.reviews.filter(r=>r.state!=='pending');
- const card=r=>`<div class="card ${r.state==='pending'?'gatebox':''}"><div class="row"><b>${r.item}</b>${pill(r.state)}<span class="sub">confidence ${r.conf.toFixed(2)}</span></div>
- <p><b>Why held:</b> ${esc(r.reason)}</p><p><b>Label text:</b> ${r.label?esc(r.label):'<i>none</i>'}</p>${r.proposed?`<p><b>Proposed tags:</b> ${tagText(r.proposed)}</p>`:''}
- ${r.state!=='pending'?`<p><b>Decision:</b> ${r.state}${r.decided?' : '+tagText(r.decided):''}</p>`:`<div class="row"><button class="go" data-act>Approve proposed tags</button><button class="alt" disabled title="available in the live app">Edit</button><button class="no" disabled title="available in the live app">Reject item</button></div>`}</div>`;
- return `<h1>2. Review queue</h1><p class="sub">Items the Intake Agent was not confident about. The agent is paused on each one until you decide.</p>
- ${p.length?p.map(card).join(''):empty('Nothing waiting right now.')}${d.length?`<h2>Decided</h2>${d.map(card).join('')}`:''}`}
-function disp(f){const pl=f.plan,pend=f.approvals.filter(a=>a.state==='pending');
- return `<h1>3. Disposition: route, book, notify</h1><p class="sub">The Disposition Agent finds items whose time is up, routes them, books pickups (you approve each one), and sends alerts.</p>
- <div class="card row"><div class="grow"><b>Review date: ${f.today}</b> <span class="sub">${f.inv} items in inventory</span></div></div>
- <div class="card row">${stat(pl.due,'due now')}${stat(pl.pickups,'pickups possible')}${stat(pl.esc.length,'need a person')}${stat(pl.skipped,'skipped')}</div>
- <h2>Pickup approvals ${pend.length?`<span class="badge">${pend.length}</span>`:''}</h2>
- ${f.approvals.length?f.approvals.map(a=>`<div class="card ${a.state==='pending'?'gatebox':''}"><div class="row"><b>${String(a.input.route).replace('_',' ')} pickup</b>${pill(a.state)}<span class="sub">${a.input.items.length} items, deadline ${a.input.deadline}, partner ${a.input.partner_id}</span></div>
- <p>Items: ${a.input.items.join(', ')}</p>${a.input.lots&&Object.keys(a.input.lots).length?`<p>Colour lots: ${Object.entries(a.input.lots).map(([g,v])=>`${g} (${v.length})`).join(', ')}</p>`:''}
- ${a.state==='pending'?`<div class="row"><button class="go" data-act>Approve booking</button><button class="no" disabled title="available in the live app">Deny</button></div>`:''}</div>`).join(''):empty('No bookings requested yet.')}
- <h2>Due now and why</h2><div class="card" style="padding:0;overflow:auto;max-height:300px">${pl.routes.length?`<table><thead><tr><th>Item</th><th>Route</th><th>Colour</th><th>Why due</th></tr></thead><tbody>${pl.routes.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3].map(x=>RS[x]).join(', ')}</td></tr>`).join('')}</tbody></table>`:empty('Nothing is due (everything due has been handled).')}</div>
- ${pl.escalations.length?`<h2>Needs a person</h2>${pl.escalations.map(e=>`<div class="card"><b>${e.reason.replace('_',' ')}</b>: ${e.items.join(', ')}</div>`).join('')}`:''}
- <h2>Booked pickups</h2>${f.pickups.length?f.pickups.map(p=>`<div class="card"><b>${p.id}</b> ${p.route} with ${p.partner}, ${p.n} items, by ${p.deadline}</div>`).join(''):empty('None yet.')}
- <h2>Live agent feed</h2>${feed(f)}`}
-function alerts(f){return `<h1>4. Alerts and cost</h1><p class="sub">What the responsible person receives, and what the agents are costing.</p>
- <div class="card row">${stat('$100.00','ZooWork balance (fake mode)')}${stat(f.alerts.length,'alerts')}</div>
- <h2>Inbox ${f.alerts.length?`<span class="badge">${f.alerts.length}</span>`:''}</h2>
- ${f.alerts.length?f.alerts.map(a=>`<div class="card alert-unread"><div class="row">${pill(a.type==='review_waiting'?'pending':'sent')}<b>[${a.type.toUpperCase()}] ${esc(a.summary)}</b></div>
- <p style="margin:6px 0">Items: ${a.items.join(', ')}${a.location?' | Location: '+esc(a.location):''}${a.deadline?' | Deadline: '+a.deadline:''}</p><p style="margin:0"><b>Next step:</b> ${esc(a.next)}</p></div>`).join(''):empty('No alerts yet. Keep playing until the Disposition run.')}`}
 function advance(){if(i<FRAMES.length-1){i++;render();return true}stop();return false}
 function stop(){clearInterval(timer);timer=null;$('#play').textContent='Play'}
 function play(){if(timer){stop();return}$('#play').textContent='Pause';
  timer=setInterval(()=>{const f=FRAMES[i];if(f.gate){stop();tab=f.gate==='review'?'review':'disp';render();return}if(!advance())stop()},260)}
 $('#play').onclick=play;$('#next').onclick=()=>{stop();advance()};$('#reset').onclick=()=>{stop();i=0;tab='intake';render()};
 $('#gate').onclick=()=>{stop();while(i<FRAMES.length-1){i++;if(FRAMES[i].gate){tab=FRAMES[i].gate==='review'?'review':'disp';break}}render()};
-document.querySelectorAll('nav a').forEach(a=>a.onclick=()=>{tab=a.dataset.t;render()});
+document.querySelectorAll('.side a').forEach(a=>a.onclick=()=>{tab=a.dataset.t;render()});
+{const h=Object.fromEntries((location.hash.slice(1)||'').split('&').filter(Boolean).map(x=>x.split('=')));if(h.t)tab=h.t;if(h.f)i=Math.min(+h.f,FRAMES.length-1)}
 render();
 </script></body></html>
