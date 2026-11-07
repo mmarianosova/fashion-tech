@@ -178,3 +178,32 @@ test('material-only catalog intake stores outer and lining separately and exclud
   });
   assert.equal((await db.all("SELECT status FROM inventory WHERE item_key='M:T123'"))[0].status, 'material_tagged');
 });
+
+test('batch results retain catalog evidence and show the reviewer’s final material', async () => {
+  const { readBatchResults } = await import('../lib/batch-results.ts');
+  const { db, deps } = await setup();
+  await db.run("INSERT INTO batches (batch_id,created_at) VALUES ('R','2026-11-07')");
+  await db.run("INSERT INTO batch_items (batch_id,item_key) VALUES ('R','R:T123')");
+  await db.run("INSERT INTO intake_inputs VALUES ('R','R:T123',?)",
+    [JSON.stringify(catalog({ ...row, composition: '80% cotton' }))]);
+  await simulateIntake({ ...deps, materialOnly: true }, 'results-session', 'R', {
+    threshold: 0.8,
+    wait: async (check) => {
+      const [review] = await db.all("SELECT * FROM reviews WHERE session_id='results-session'");
+      const pending = await readBatchResults(db, 'R');
+      assert.equal(pending?.items[0].state, 'held');
+      await resolveReview(deps, review.review_id, 'edit',
+        { ...JSON.parse(review.proposed_tags), fibre_type: '80% cotton, 20% polyester' });
+      assert.ok(await check());
+    },
+  });
+  const result = await readBatchResults(db, 'R');
+  const [item] = result!.items;
+  assert.equal(item.style, 'T123');
+  assert.equal(item.state, 'tagged');
+  assert.equal(item.material, '80% cotton, 20% polyester');
+  assert.equal(item.review?.before, null);
+  assert.equal(item.review?.after, item.material);
+  assert.equal(item.evidence.workbookRows[0].composition, '80% cotton');
+  assert.equal(await readBatchResults(db, 'unknown-batch'), null);
+});

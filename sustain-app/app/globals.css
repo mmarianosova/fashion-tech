@@ -159,3 +159,14 @@ body.demo .scroll{flex:1;overflow-y:auto}
 
 .reqdoc{border:2px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;background:#fbfcfe}.reqdoc h4{margin:0 0 6px;font-size:1.1rem}.reqdoc p{margin:4px 0;font-size:.9rem}
 @media print{.top,.hello,.foot,.choices,.sheet button.cancel,.sheet button.big,.toast{display:none!important}}
+
+.results-summary,.result-card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.results h2{margin:0;font-size:1.12rem;overflow-wrap:anywhere}
+.results p{margin:4px 0}
+.result-card header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.result-card header span{background:var(--blue-soft);color:var(--navy2);border-radius:8px;padding:4px 8px;font-size:.7rem;font-weight:800;text-align:center}
+.result-card dl{margin:10px 0 0}
+.result-card dt{font-size:.72rem;font-weight:800;color:var(--mute);text-transform:uppercase;letter-spacing:.04em;margin-top:8px}
+.result-card dd{margin:0;font-size:.88rem;overflow-wrap:anywhere}
+.result-card details ul{padding-left:18px;margin:4px 0}
+.result-card summary{cursor:pointer;font-weight:700}

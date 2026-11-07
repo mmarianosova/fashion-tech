@@ -53,6 +53,9 @@ export default function Home() {
         : <><h3>Due items</h3><p>This runs by itself every day. You can also run it now.</p>
           <button className="big go" onClick={() => go('/api/runs/disposition')}>Run now</button></>}
       </section>
+      {snap.batch && <Link href={`/results?batch=${encodeURIComponent(snap.batch.batch_id)}`} className="tile">
+        <span className="ic">{Ico.label}</span><span><b>Batch results</b><span className="d">See materials, sources and review decisions</span></span>
+      </Link>}
       {err && <p className="err">{err}</p>}
       <div className="foot"><Link href="/team">For the tech team</Link></div>
     </main>
